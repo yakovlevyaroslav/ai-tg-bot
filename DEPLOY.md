@@ -206,6 +206,35 @@ npm run db:init
 
 Ожидаемый вывод: `Database schema applied`.
 
+`db:init` нужен только `DATABASE_URL` в `.env`. Токен Telegram проверяется при `npm start` / PM2.
+
+### Если ошибка SYSTEM_PROMPT_FILE not found
+
+Файл `prompts/system.txt` в git **нет** (личный промпт). На сервере либо **удалите** строку из `.env`:
+
+```bash
+nano .env
+# закомментируйте или удалите: SYSTEM_PROMPT_FILE=prompts/system.txt
+```
+
+либо создайте файл:
+
+```bash
+cp prompts/system.example.txt prompts/system.txt
+```
+
+Специалисты (таролог и т.д.) используют `prompts/specialists/*.txt` — они уже в репозитории.
+
+Обновите код (`git pull`) — `npm run db:init` не должен загружать `config.js`.
+
+В `.env` на одной строке, без кавычек и пробелов:
+
+```env
+TELEGRAM_BOT_TOKEN=1234567890:AAHxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+Токен берётся в [@BotFather](https://t.me/BotFather) → ваш бот → **API Token** (не username бота).
+
 Проверка одноразового запуска:
 
 ```bash
@@ -330,6 +359,7 @@ pm2 restart ai-tg-bot
 | `insufficient_quota` | Пополнить OpenAI, пока `AI_PROVIDER=mock` |
 | Админка не открывается | `pm2 logs`, проверьте `ADMIN_WEB_PASSWORD`, порт `3080` |
 | Бот падал после деплоя | `npm ci`, `pm2 restart`, смотреть логи |
+| `getMe failed` / timeout | Проверьте `TELEGRAM_BOT_TOKEN`, `curl .../getMe` |
 
 ---
 

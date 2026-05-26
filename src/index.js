@@ -4,16 +4,54 @@ import { ensureDatabase } from './ensure-database.js';
 import { initDb, closeDb } from './db.js';
 import { startAdminServer, stopAdminServer } from './admin-panel/server.js';
 
+const TELEGRAM_LAUNCH_TIMEOUT_MS = Number(process.env.TELEGRAM_LAUNCH_TIMEOUT_MS || 20000);
+
+function formatTelegramStartError(err) {
+  const code = err?.code ?? err?.cause?.code ?? err?.errno;
+  const message = err?.message ?? String(err);
+
+  if (code === 'ENOTFOUND' || code === 'ETIMEDOUT' || code === 'ECONNREFUSED') {
+    return (
+      `Нет связи с Telegram API (${code}: ${message}).\n` +
+      'Проверьте: curl -s "https://api.telegram.org/bot<TOKEN>/getMe"'
+    );
+  }
+
+  return message || 'Unknown Telegram error';
+}
+
+function launchWithTimeout(bot, ms) {
+  return Promise.race([
+    bot.launch(),
+    new Promise((_, reject) => {
+      setTimeout(() => {
+        reject(
+          new Error(
+            `Telegram connection timeout (${ms / 1000}s). Проверьте TELEGRAM_BOT_TOKEN и доступ к api.telegram.org`,
+          ),
+        );
+      }, ms);
+    }),
+  ]);
+}
+
 async function main() {
   await ensureDatabase(config.databaseUrl);
   await initDb();
 
   const bot = createBot();
   const adminServer = startAdminServer();
+  let botRunning = false;
 
   const shutdown = async (signal) => {
     console.log(`\n${signal}, stopping...`);
-    bot.stop(signal);
+    if (botRunning) {
+      try {
+        bot.stop(signal);
+      } catch {
+        // бот не успел запуститься — игнорируем
+      }
+    }
     await stopAdminServer(adminServer);
     await closeDb();
     process.exit(0);
@@ -23,15 +61,18 @@ async function main() {
   process.once('SIGTERM', () => shutdown('SIGTERM'));
 
   try {
-    await bot.launch();
+    console.log('Connecting to Telegram API...');
+    await launchWithTimeout(bot, TELEGRAM_LAUNCH_TIMEOUT_MS);
+    botRunning = true;
     console.log(`Bot is running (AI_PROVIDER=${config.aiProvider})`);
   } catch (err) {
-    console.error('Telegram bot failed to start:', err?.message ?? err);
+    console.error('Telegram bot failed to start:', formatTelegramStartError(err));
     if (config.adminWebEnabled) {
       console.log(
         `Admin panel is still available at http://localhost:${config.adminWebPort}/admin`,
       );
     }
+    console.log('Исправьте ошибку и выполните: pm2 restart ai-tg-bot');
   }
 }
 

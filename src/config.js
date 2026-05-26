@@ -11,7 +11,10 @@ function loadSystemPrompt() {
   if (filePath) {
     const absolute = resolve(process.cwd(), filePath);
     if (!existsSync(absolute)) {
-      throw new Error(`SYSTEM_PROMPT_FILE not found: ${absolute}`);
+      console.warn(
+        `[config] SYSTEM_PROMPT_FILE not found: ${absolute} — using default prompt (specialists use prompts/specialists/*.txt)`,
+      );
+      return DEFAULT_SYSTEM_PROMPT;
     }
     return readFileSync(absolute, 'utf8').trim();
   }
@@ -46,25 +49,27 @@ function parseAdminIds(value) {
 const aiProvider = (process.env.AI_PROVIDER || 'mock').toLowerCase();
 
 function validateTelegramToken(token) {
+  const cleaned = token.trim().replace(/^['"]|['"]$/g, '');
   const placeholders = new Set([
     'your_telegram_bot_token',
     'your_token',
     'changeme',
   ]);
 
-  if (placeholders.has(token.trim().toLowerCase())) {
+  if (placeholders.has(cleaned.toLowerCase())) {
     throw new Error(
       'TELEGRAM_BOT_TOKEN is a placeholder. Open @BotFather → your bot → API Token, copy token to .env',
     );
   }
 
-  if (!/^\d+:[A-Za-z0-9_-]{20,}$/.test(token.trim())) {
+  // Формат BotFather: 1234567890:AAH... (без пробелов и переносов)
+  if (!/^\d{8,12}:[A-Za-z0-9_-]{30,}$/.test(cleaned)) {
     throw new Error(
-      'TELEGRAM_BOT_TOKEN format is invalid. Expected: 123456789:AAHxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+      'TELEGRAM_BOT_TOKEN format is invalid. Copy the full token from @BotFather (one line, no quotes). Example: 1234567890:AAHxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
     );
   }
 
-  return token.trim();
+  return cleaned;
 }
 
 export const config = {

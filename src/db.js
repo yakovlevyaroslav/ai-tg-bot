@@ -2,11 +2,11 @@ import pg from 'pg';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { config } from './config.js';
+import { getDatabaseUrl } from './env.js';
 
 const { Pool } = pg;
 
-const pool = new Pool({ connectionString: config.databaseUrl });
+const pool = new Pool({ connectionString: getDatabaseUrl() });
 
 export async function initDb() {
   const sqlPath = join(dirname(fileURLToPath(import.meta.url)), '../sql/init.sql');
