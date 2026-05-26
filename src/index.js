@@ -1,10 +1,11 @@
+import './dns-ipv4-first.js';
 import { createBot } from './bot.js';
 import { config } from './config.js';
 import { ensureDatabase } from './ensure-database.js';
 import { initDb, closeDb } from './db.js';
 import { startAdminServer, stopAdminServer } from './admin-panel/server.js';
 
-const TELEGRAM_LAUNCH_TIMEOUT_MS = Number(process.env.TELEGRAM_LAUNCH_TIMEOUT_MS || 20000);
+const TELEGRAM_LAUNCH_TIMEOUT_MS = Number(process.env.TELEGRAM_LAUNCH_TIMEOUT_MS || 60000);
 
 function formatTelegramStartError(err) {
   const code = err?.code ?? err?.cause?.code ?? err?.errno;

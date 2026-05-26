@@ -359,7 +359,7 @@ pm2 restart ai-tg-bot
 | `insufficient_quota` | Пополнить OpenAI, пока `AI_PROVIDER=mock` |
 | Админка не открывается | `pm2 logs`, проверьте `ADMIN_WEB_PASSWORD`, порт `3080` |
 | Бот падал после деплоя | `npm ci`, `pm2 restart`, смотреть логи |
-| `getMe failed` / timeout | Проверьте `TELEGRAM_BOT_TOKEN`, `curl .../getMe` |
+| `getMe failed` / timeout | `curl .../getMe`, затем `git pull` (fix IPv4), `pm2 restart` |
 
 ---
 
