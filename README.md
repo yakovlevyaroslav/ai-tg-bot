@@ -4,7 +4,7 @@ Telegram-бот на Node.js с ChatGPT (или mock-режимом), истор
 
 📖 **Подробная документация:** [DOCUMENTATION.md](./DOCUMENTATION.md) — технологии, каждый файл, БД, сценарии, настройка API и пополнения.
 
-🚀 **Деплой на Ubuntu VPS:** [DEPLOY.md](./DEPLOY.md)
+🚀 **Деплой на VPS:** [DEPLOY.md](./DEPLOY.md)
 
 ## Стек
 
