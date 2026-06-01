@@ -202,6 +202,11 @@ async function handleChatMessage(ctx, userId, text, specialistId) {
 export function createBot() {
   const bot = new Telegraf(config.telegramToken);
 
+  bot.catch((err, ctx) => {
+    console.error('[bot] error:', err?.message ?? err, err?.stack);
+    ctx.reply('Произошла ошибка. Попробуйте ещё раз или /start').catch(() => {});
+  });
+
   bot.start(async (ctx) => {
     const { userId, bonus } = await registerUser(ctx);
     await sendWelcome(ctx, bonus, userId);

@@ -37,6 +37,19 @@ export async function sendTopupMenu(ctx) {
 }
 
 export async function handleTopupAmount(ctx, userId, rub) {
+  try {
+    await handleTopupAmountInner(ctx, userId, rub);
+  } catch (err) {
+    console.error('[topup] unhandled:', err?.message ?? err, err?.stack);
+    await ctx.reply(
+      'Не удалось оформить пополнение. Попробуйте позже.\n\n' +
+        `Технически: ${err?.message ?? 'ошибка'}`,
+      mainKeyboard(),
+    ).catch(() => {});
+  }
+}
+
+async function handleTopupAmountInner(ctx, userId, rub) {
   const allowed = config.topupPackagesRub;
 
   if (!allowed.includes(rub)) {
@@ -45,15 +58,19 @@ export async function handleTopupAmount(ctx, userId, rub) {
   }
 
   if (config.paymentProvider === 'yookassa') {
-    const synced = await syncUserYookassaPayments(userId);
-    if (synced.length > 0) {
-      const last = synced[synced.length - 1];
-      await ctx.reply(
-        `✅ Оплата прошла!\n\n+${last.pending.credits_amount} кредитов\n` +
-          `Баланс: ${last.balanceAfter} кредитов`,
-        mainKeyboard(),
-      );
-      return;
+    try {
+      const synced = await syncUserYookassaPayments(userId);
+      if (synced.length > 0) {
+        const last = synced[synced.length - 1];
+        await ctx.reply(
+          `✅ Оплата прошла!\n\n+${last.pending.credits_amount} кредитов\n` +
+            `Баланс: ${last.balanceAfter} кредитов`,
+          mainKeyboard(),
+        );
+        return;
+      }
+    } catch (err) {
+      console.warn('[topup] sync pending payments skipped:', err?.message ?? err);
     }
   }
 

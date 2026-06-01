@@ -38,7 +38,13 @@ export async function syncUserYookassaPayments(userId) {
   const completed = [];
 
   for (const pending of pendingList) {
-    const remote = await getPayment(pending.external_payment_id);
+    let remote;
+    try {
+      remote = await getPayment(pending.external_payment_id);
+    } catch (err) {
+      console.warn('[yookassa] sync getPayment failed:', pending.payment_code, err?.message ?? err);
+      continue;
+    }
 
     if (remote.status === 'succeeded') {
       const result = await payments.completeYookassaPayment(

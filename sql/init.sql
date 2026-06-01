@@ -71,7 +71,15 @@ CREATE TABLE IF NOT EXISTS pending_payments (
 );
 
 ALTER TABLE pending_payments
-  ADD COLUMN IF NOT EXISTS provider TEXT NOT NULL DEFAULT 'manual';
+  ADD COLUMN IF NOT EXISTS provider TEXT;
+
+UPDATE pending_payments SET provider = 'manual' WHERE provider IS NULL;
+
+ALTER TABLE pending_payments
+  ALTER COLUMN provider SET DEFAULT 'manual';
+
+ALTER TABLE pending_payments
+  ALTER COLUMN provider SET NOT NULL;
 
 ALTER TABLE pending_payments
   ADD COLUMN IF NOT EXISTS external_payment_id TEXT;
