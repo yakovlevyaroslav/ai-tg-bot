@@ -68,6 +68,29 @@ export async function getUserIdByTelegramId(telegramId) {
   return rows[0]?.id ?? null;
 }
 
+export async function getUserAccessByTelegramId(telegramId) {
+  const { rows } = await pool.query(
+    `SELECT id, access_granted FROM users WHERE telegram_id = $1`,
+    [telegramId],
+  );
+  return rows[0] ?? null;
+}
+
+export async function grantBotAccess({ telegramId, username, firstName }) {
+  const { rows } = await pool.query(
+    `INSERT INTO users (telegram_id, username, first_name, access_granted)
+     VALUES ($1, $2, $3, TRUE)
+     ON CONFLICT (telegram_id)
+     DO UPDATE SET
+       username = EXCLUDED.username,
+       first_name = EXCLUDED.first_name,
+       access_granted = TRUE
+     RETURNING id, access_granted, welcome_bonus_granted, specialist`,
+    [telegramId, username ?? null, firstName ?? null],
+  );
+  return rows[0];
+}
+
 export async function getHistory(userId, limit) {
   const { rows } = await pool.query(
     `SELECT role, content

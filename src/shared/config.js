@@ -126,6 +126,8 @@ export const config = {
   })(),
   adminWebHost: process.env.ADMIN_WEB_HOST || '127.0.0.1',
   adminTelegramIds: parseAdminIds(process.env.ADMIN_TELEGRAM_IDS),
+  /** Если задан — бот доступен только после ввода пароля (админы проходят без пароля) */
+  botAccessPassword: process.env.BOT_ACCESS_PASSWORD?.trim() || '',
   adminWebPort: Number(process.env.ADMIN_WEB_PORT || 3080),
   adminWebUser: process.env.ADMIN_WEB_USER || 'admin',
   adminWebPassword: process.env.ADMIN_WEB_PASSWORD || '',

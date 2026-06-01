@@ -14,6 +14,9 @@ ALTER TABLE users
   ADD COLUMN IF NOT EXISTS specialist TEXT
     CHECK (specialist IS NULL OR specialist IN ('tarolog', 'numerolog', 'rodolog'));
 
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS access_granted BOOLEAN NOT NULL DEFAULT FALSE;
+
 CREATE TABLE IF NOT EXISTS balances (
   user_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   credits BIGINT NOT NULL DEFAULT 0 CHECK (credits >= 0),

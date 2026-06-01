@@ -23,6 +23,7 @@ import {
   sendSpecialistMenu,
   specialistStatusLine,
 } from './specialist-flow.js';
+import { createAccessGateMiddleware, isBotAccessGateEnabled } from './access-gate.js';
 
 const TELEGRAM_MAX_LENGTH = 4096;
 
@@ -201,6 +202,20 @@ async function handleChatMessage(ctx, userId, text, specialistId) {
 
 export function createBot() {
   const bot = new Telegraf(config.telegramToken);
+
+  bot.use(
+    createAccessGateMiddleware({
+      onAccessGranted: async (ctx) => {
+        const { userId, bonus } = await registerUser(ctx);
+        await ctx.reply('✅ Доступ открыт!');
+        await sendWelcome(ctx, bonus, userId);
+      },
+    }),
+  );
+
+  if (isBotAccessGateEnabled()) {
+    console.log('[bot] access gate enabled (password required)');
+  }
 
   bot.start(async (ctx) => {
     const { userId, bonus } = await registerUser(ctx);
