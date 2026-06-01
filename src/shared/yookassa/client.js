@@ -1,7 +1,20 @@
 import { randomUUID } from 'node:crypto';
+import { ProxyAgent } from 'undici';
 import { config } from '../config.js';
 
 const API_URL = 'https://api.yookassa.ru/v3/payments';
+
+let proxyDispatcher = null;
+function getDispatcher() {
+  if (!config.yookassaProxy) return undefined;
+  if (!proxyDispatcher) {
+    proxyDispatcher = new ProxyAgent(config.yookassaProxy);
+    console.log(
+      `[yookassa] using proxy: ${config.yookassaProxy.replace(/\/\/[^@]+@/, '//***@')}`,
+    );
+  }
+  return proxyDispatcher;
+}
 
 function authHeader() {
   const token = Buffer.from(`${config.yookassaShopId}:${config.yookassaSecretKey}`).toString(
@@ -31,6 +44,24 @@ function buildReceipt(amountRub, description) {
   };
 }
 
+async function yookassaFetch(url, init = {}) {
+  try {
+    return await fetch(url, { ...init, dispatcher: getDispatcher() });
+  } catch (err) {
+    // undici оборачивает сетевые ошибки в `fetch failed`, реальная причина в cause
+    const cause = err?.cause;
+    const code = cause?.code || cause?.errno;
+    const msg = code
+      ? `network error (${code}) reaching ${new URL(url).host}${
+          config.yookassaProxy ? ' via proxy' : ''
+        }`
+      : err?.message || 'fetch failed';
+    const wrapped = new Error(msg);
+    wrapped.cause = cause;
+    throw wrapped;
+  }
+}
+
 export async function createPayment({ amountRub, description, metadata }) {
   const body = {
     amount: {
@@ -50,7 +81,7 @@ export async function createPayment({ amountRub, description, metadata }) {
     body.receipt = buildReceipt(amountRub, description);
   }
 
-  const response = await fetch(API_URL, {
+  const response = await yookassaFetch(API_URL, {
     method: 'POST',
     headers: {
       Authorization: authHeader(),
@@ -71,7 +102,7 @@ export async function createPayment({ amountRub, description, metadata }) {
 }
 
 export async function getPayment(paymentId) {
-  const response = await fetch(`${API_URL}/${paymentId}`, {
+  const response = await yookassaFetch(`${API_URL}/${paymentId}`, {
     headers: { Authorization: authHeader() },
   });
   const data = await response.json();
