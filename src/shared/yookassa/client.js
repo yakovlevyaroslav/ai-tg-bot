@@ -1,19 +1,34 @@
 import { randomUUID } from 'node:crypto';
-import { ProxyAgent } from 'undici';
+import { Agent, ProxyAgent, fetch as undiciFetch } from 'undici';
 import { config } from '../config.js';
 
 const API_URL = 'https://api.yookassa.ru/v3/payments';
+const TIMEOUT_MS = Number(process.env.YOOKASSA_REQUEST_TIMEOUT_MS || 30000);
 
-let proxyDispatcher = null;
+let cachedDispatcher = null;
 function getDispatcher() {
-  if (!config.yookassaProxy) return undefined;
-  if (!proxyDispatcher) {
-    proxyDispatcher = new ProxyAgent(config.yookassaProxy);
+  if (cachedDispatcher) return cachedDispatcher;
+
+  if (config.yookassaProxy) {
+    cachedDispatcher = new ProxyAgent({
+      uri: config.yookassaProxy,
+      connect: { family: 4, timeout: TIMEOUT_MS },
+      bodyTimeout: TIMEOUT_MS,
+      headersTimeout: TIMEOUT_MS,
+    });
     console.log(
       `[yookassa] using proxy: ${config.yookassaProxy.replace(/\/\/[^@]+@/, '//***@')}`,
     );
+  } else {
+    cachedDispatcher = new Agent({
+      connect: { family: 4, timeout: TIMEOUT_MS },
+      bodyTimeout: TIMEOUT_MS,
+      headersTimeout: TIMEOUT_MS,
+    });
+    console.log('[yookassa] direct connection (no proxy), forcing IPv4');
   }
-  return proxyDispatcher;
+
+  return cachedDispatcher;
 }
 
 function authHeader() {
@@ -24,11 +39,7 @@ function authHeader() {
 }
 
 function buildReceipt(amountRub, description) {
-  const amount = {
-    value: Number(amountRub).toFixed(2),
-    currency: 'RUB',
-  };
-
+  const amount = { value: Number(amountRub).toFixed(2), currency: 'RUB' };
   return {
     customer: { email: config.yookassaReceiptEmail.trim() },
     items: [
@@ -46,33 +57,24 @@ function buildReceipt(amountRub, description) {
 
 async function yookassaFetch(url, init = {}) {
   try {
-    return await fetch(url, { ...init, dispatcher: getDispatcher() });
+    return await undiciFetch(url, { ...init, dispatcher: getDispatcher() });
   } catch (err) {
-    // undici оборачивает сетевые ошибки в `fetch failed`, реальная причина в cause
     const cause = err?.cause;
-    const code = cause?.code || cause?.errno;
-    const msg = code
-      ? `network error (${code}) reaching ${new URL(url).host}${
-          config.yookassaProxy ? ' via proxy' : ''
-        }`
-      : err?.message || 'fetch failed';
-    const wrapped = new Error(msg);
-    wrapped.cause = cause;
+    const code = cause?.code || cause?.errno || err?.code;
+    const via = config.yookassaProxy ? ' via proxy' : '';
+    const where = `${new URL(url).host}${via}`;
+    const message = code ? `network error (${code}) reaching ${where}` : (err?.message || 'fetch failed');
+    const wrapped = new Error(message);
+    wrapped.cause = cause || err;
     throw wrapped;
   }
 }
 
 export async function createPayment({ amountRub, description, metadata }) {
   const body = {
-    amount: {
-      value: Number(amountRub).toFixed(2),
-      currency: 'RUB',
-    },
+    amount: { value: Number(amountRub).toFixed(2), currency: 'RUB' },
     capture: true,
-    confirmation: {
-      type: 'redirect',
-      return_url: config.yookassaReturnUrl,
-    },
+    confirmation: { type: 'redirect', return_url: config.yookassaReturnUrl },
     description,
     metadata,
   };
