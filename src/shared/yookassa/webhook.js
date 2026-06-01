@@ -46,8 +46,9 @@ export function createYookassaWebhookHandler({ notifyUser }) {
 
       res.status(200).send('');
     } catch (err) {
+      // ЮKassa ретраит всё, что не HTTP 200, до 24 часов — отвечаем 200 и логируем.
       console.error('[yookassa] webhook error:', err?.message ?? err);
-      res.status(500).send('Error');
+      res.status(200).send('');
     }
   };
 }

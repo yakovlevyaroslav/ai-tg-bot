@@ -1,0 +1,18 @@
+[Unit]
+Description=AI Telegram Bot — Site/Admin/Webhook
+After=network.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/root/projects/ai-tg-bot
+ExecStart=/usr/bin/node src/site/index.js
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ai-tg-site
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target

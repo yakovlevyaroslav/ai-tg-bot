@@ -7,6 +7,8 @@ import {
   syncUserYookassaPayments,
   checkYookassaPayment,
 } from '../shared/yookassa/service.js';
+import { scheduleYookassaPaymentPoll } from '../shared/yookassa/poll.js';
+import { notifyPaymentSuccess } from '../site/notify.js';
 import { mainKeyboard, TOPUP_BACK } from './keyboards.js';
 
 export function topupAmountKeyboard() {
@@ -62,17 +64,23 @@ export async function handleTopupAmount(ctx, userId, rub) {
   if (config.paymentProvider === 'yookassa') {
     try {
       const { pending, confirmationUrl } = await startTopupPayment(userId, rub);
+      scheduleYookassaPaymentPoll({
+        userId,
+        paymentCode: pending.payment_code,
+        onSuccess: notifyPaymentSuccess,
+      });
+
       await ctx.reply(
         `💳 Оплата ${pending.rub_amount} ₽ → ${pending.credits_amount} кредитов\n\n` +
           '1. Нажмите «Оплатить» и завершите платёж на сайте ЮKassa\n' +
-          '2. Вернитесь в бот и нажмите «Проверить оплату»\n\n' +
-          '(на сервере с webhook кредиты начислятся автоматически)',
+          '2. Кредиты начислятся автоматически (обычно в течение минуты)\n\n' +
+          'Если не начислились — нажмите «Проверить оплату»',
         Markup.inlineKeyboard([
           [Markup.button.url('💳 Оплатить', confirmationUrl)],
           [Markup.button.callback('🔄 Проверить оплату', `checkpay:${pending.payment_code}`)],
         ]),
       );
-      await ctx.reply('После оплаты нажмите «Проверить оплату» в сообщении выше ↑', mainKeyboard());
+      await ctx.reply('После оплаты можно вернуться в бот — баланс обновится сам', mainKeyboard());
     } catch (err) {
       console.error('[topup] yookassa error:', err?.message ?? err);
       await ctx.reply(

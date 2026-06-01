@@ -1,0 +1,18 @@
+[Unit]
+Description=AI Telegram Bot
+After=network.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/root/projects/ai-tg-bot
+ExecStart=/usr/bin/node src/bot/index.js
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ai-tg-bot
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target
