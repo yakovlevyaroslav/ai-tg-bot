@@ -1,14 +1,21 @@
 import { Telegraf } from 'telegraf';
-import { config } from './config.js';
-import * as db from './db.js';
-import * as billing from './billing.js';
+import { config } from '../shared/config.js';
+import * as db from '../shared/db.js';
+import * as billing from '../shared/billing.js';
 import { complete } from './ai/index.js';
-import { getUserErrorMessage } from './errors.js';
-import { BUTTONS, mainKeyboard } from './keyboards.js';
-import { isAdmin, handleGrantCommand, handleConfirmCommand } from './admin.js';
+import { getUserErrorMessage } from '../shared/errors.js';
+import { BUTTONS, mainKeyboard, TOPUP_BACK } from './keyboards.js';
+import { isAdmin, handleGrantCommand, handleConfirmCommand } from './admin-commands.js';
 import { checkCooldown } from './rate-limit.js';
-import { formatRateLine } from './pricing.js';
-import { sendTopupMenu, handleTopupCallback } from './topup.js';
+import { formatRateLine } from '../shared/pricing.js';
+import {
+  sendTopupMenu,
+  handleTopupCallback,
+  handleTopupAmount,
+  parseTopupButton,
+  handleCheckPaymentCallback,
+  syncYookassaBeforeBalance,
+} from './topup.js';
 import { getSpecialistPrompt } from './specialists.js';
 import {
   applySpecialistChoice,
@@ -70,15 +77,23 @@ async function registerUser(ctx) {
 
 async function sendBalance(ctx, userId = null) {
   const id = userId ?? (await registerUser(ctx)).userId;
+
+  const yookassaSync = await syncYookassaBeforeBalance(id);
   const balance = await billing.getBalance(id);
   const cost = billing.estimateMessageCost();
-  await ctx.reply(
+
+  let text =
     `Баланс: ${balance} кредитов\n` +
-      `Стоимость сообщения: ${cost} кредитов\n` +
-      `Хватит примерно на ${cost > 0 ? Math.floor(balance / cost) : '∞'} ответов.\n\n` +
-      formatRateLine(),
-    mainKeyboard(),
-  );
+    `Стоимость сообщения: ${cost} кредитов\n` +
+    `Хватит примерно на ${cost > 0 ? Math.floor(balance / cost) : '∞'} ответов.\n\n` +
+    formatRateLine();
+
+  if (yookassaSync) {
+    text =
+      `✅ Зачислено +${yookassaSync.pending.credits_amount} кредитов после оплаты\n\n` + text;
+  }
+
+  await ctx.reply(text, mainKeyboard());
 }
 
 async function sendWelcome(ctx, bonus = null, userId = null) {
@@ -253,6 +268,11 @@ export function createBot() {
     await handleTopupCallback(ctx, userId, ctx.match[1]);
   });
 
+  bot.action(/^checkpay:(.+)$/, async (ctx) => {
+    const { userId } = await registerUser(ctx);
+    await handleCheckPaymentCallback(ctx, userId, ctx.match[1]);
+  });
+
   bot.action(/^specialist:(.+)$/, async (ctx) => {
     const { userId } = await registerUser(ctx);
     await applySpecialistChoice(ctx, userId, ctx.match[1]);
@@ -294,6 +314,18 @@ export function createBot() {
     if (text === BUTTONS.TOPUP) {
       await registerUser(ctx);
       await sendTopupMenu(ctx);
+      return;
+    }
+
+    if (text === TOPUP_BACK) {
+      await ctx.reply('Главное меню', mainKeyboard());
+      return;
+    }
+
+    const topupRub = parseTopupButton(text);
+    if (topupRub !== null) {
+      const { userId } = await registerUser(ctx);
+      await handleTopupAmount(ctx, userId, topupRub);
       return;
     }
 

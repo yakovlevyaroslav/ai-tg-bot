@@ -1,11 +1,11 @@
 import express, { Router } from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import * as billing from '../billing.js';
-import * as payments from '../payments.js';
-import { config } from '../config.js';
+import * as billing from '../../shared/billing.js';
+import * as payments from '../../shared/payments.js';
+import { config } from '../../shared/config.js';
 import * as queries from './queries.js';
-import { formatSpecialistLine } from '../specialists.js';
+import { formatSpecialistLine } from '../../bot/specialists.js';
 import {
   esc,
   formatDate,
@@ -16,7 +16,7 @@ import {
 } from './html.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const staticDir = path.join(__dirname, '../../public/admin');
+const staticDir = path.join(__dirname, '../../../public/admin');
 
 const TX_LABELS = {
   bonus: 'Бонус',

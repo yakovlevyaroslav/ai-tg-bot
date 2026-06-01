@@ -4,7 +4,9 @@ Telegram-бот на Node.js с ChatGPT (или mock-режимом), истор
 
 📖 **Подробная документация:** [DOCUMENTATION.md](./DOCUMENTATION.md) — технологии, каждый файл, БД, сценарии, настройка API и пополнения.
 
-🚀 **Деплой на VPS:** [DEPLOY.md](./DEPLOY.md)
+💳 **Оплата и тарифы:** [PAYMENTS.md](./PAYMENTS.md) — ЮKassa, webhook, где менять пакеты и курс.
+
+🚀 **Деплой на VPS:** [DEPLOY.md](./DEPLOY.md) · **Домен + webhook:** [deploy/DOMAIN.md](./deploy/DOMAIN.md)
 
 ## Стек
 
@@ -36,7 +38,9 @@ npm run dev
 | `CREDITS_PER_MESSAGE` | Стоимость одного ответа (по умолчанию 10) |
 | `WELCOME_BONUS_CREDITS` | Бонус при первом `/start` (по умолчанию 300) |
 | `TOPUP_PACKAGES_RUB` | Пакеты пополнения через запятую |
-| `PAYMENT_DETAILS` | Реквизиты для перевода |
+| `PAYMENT_PROVIDER` | `manual` (перевод) или `yookassa` (авто) |
+| `PAYMENT_DETAILS` | Реквизиты для перевода (режим manual) |
+| `YOOKASSA_SHOP_ID`, `YOOKASSA_SECRET_KEY` | Ключи ЮKassa (режим yookassa) |
 | `ADMIN_TELEGRAM_IDS` | Telegram ID админов через запятую |
 
 ## Команды бота
@@ -59,22 +63,30 @@ npm run dev
 - заявки на пополнение с кнопкой «Подтвердить»;
 - начисление кредитов с веб-формы.
 
-### Пополнение (сейчас — ручное)
+### Пополнение
+
+**Ручной режим** (`PAYMENT_PROVIDER=manual`):
 
 1. Пользователь: **💳 Пополнить** → пакет → код `PAY-…` и реквизиты.
 2. Переводит деньги с кодом в комментарии.
-3. Админ получает уведомление и выполняет `/confirm PAY-…`.
-4. Кредиты зачисляются, пользователю приходит сообщение.
+3. Админ: `/confirm PAY-…` или кнопка в веб-админке.
 
-Позже можно подключить ЮKassa / Telegram Payments — логика `purchase` в БД уже готова.
+**ЮKassa** (`PAYMENT_PROVIDER=yookassa`): кнопка «Оплатить» → автоначисление по webhook. Настройка — [PAYMENTS.md](./PAYMENTS.md).
 
 ## Структура
 
 ```
 src/
-  bot.js       — Telegram
-  billing.js   — кредиты, списание, бонусы
-  ai/          — mock и openai провайдеры
-  admin.js     — /grant
-sql/init.sql   — схема БД
+  bot/           — Telegram-бот
+    index.js     — точка входа (npm run start:bot)
+    create-bot.js, topup.js, keyboards.js, ai/
+  site/          — сайт и webhook
+    index.js     — точка входа (npm run start:site)
+    server.js, landing.js, admin/
+  shared/        — общее: БД, биллинг, ЮKassa, config
+sql/init.sql
+deploy/          — nginx, домен, SSL
 ```
+
+**Локально:** `npm run dev` — бот + сайт вместе  
+**Production:** `pm2 start ecosystem.config.cjs` — два процесса

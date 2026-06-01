@@ -1,4 +1,4 @@
-import { config } from '../config.js';
+import { config } from '../../shared/config.js';
 
 export async function complete(messages) {
   const system = messages.find((m) => m.role === 'system')?.content ?? '';

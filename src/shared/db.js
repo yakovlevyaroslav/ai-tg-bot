@@ -9,7 +9,7 @@ const { Pool } = pg;
 const pool = new Pool({ connectionString: getDatabaseUrl() });
 
 export async function initDb() {
-  const sqlPath = join(dirname(fileURLToPath(import.meta.url)), '../sql/init.sql');
+  const sqlPath = join(dirname(fileURLToPath(import.meta.url)), '../../sql/init.sql');
   const sql = readFileSync(sqlPath, 'utf8');
   await pool.query(sql);
 }

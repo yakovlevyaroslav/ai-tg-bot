@@ -8,6 +8,8 @@ export const BUTTONS = {
   SPECIALIST: '🧙 Специалист',
 };
 
+export const TOPUP_BACK = '◀️ Назад';
+
 export function mainKeyboard() {
   return Markup.keyboard([
     [BUTTONS.SPECIALIST],

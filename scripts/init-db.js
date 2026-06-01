@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
-import { ensureDatabase } from '../src/ensure-database.js';
+import { ensureDatabase } from '../src/shared/ensure-database.js';
 
 const databaseUrl = process.env.DATABASE_URL?.trim();
 if (!databaseUrl) {

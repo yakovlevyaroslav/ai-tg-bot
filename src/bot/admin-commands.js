@@ -1,7 +1,7 @@
-import { config } from './config.js';
-import * as billing from './billing.js';
-import * as db from './db.js';
-import * as payments from './payments.js';
+import { config } from '../shared/config.js';
+import * as billing from '../shared/billing.js';
+import * as db from '../shared/db.js';
+import * as payments from '../shared/payments.js';
 
 export function isAdmin(telegramId) {
   return config.adminTelegramIds.includes(telegramId);

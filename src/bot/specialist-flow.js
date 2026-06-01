@@ -1,4 +1,4 @@
-import * as db from './db.js';
+import * as db from '../shared/db.js';
 import {
   SPECIALISTS,
   formatSpecialistLine,

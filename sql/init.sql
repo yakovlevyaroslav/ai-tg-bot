@@ -61,11 +61,24 @@ CREATE TABLE IF NOT EXISTS pending_payments (
   payment_code TEXT NOT NULL UNIQUE,
   rub_amount INT NOT NULL CHECK (rub_amount > 0),
   credits_amount BIGINT NOT NULL CHECK (credits_amount > 0),
+  provider TEXT NOT NULL DEFAULT 'manual'
+    CHECK (provider IN ('manual', 'yookassa')),
+  external_payment_id TEXT,
   status TEXT NOT NULL DEFAULT 'pending'
     CHECK (status IN ('pending', 'completed', 'cancelled')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   completed_at TIMESTAMPTZ
 );
+
+ALTER TABLE pending_payments
+  ADD COLUMN IF NOT EXISTS provider TEXT NOT NULL DEFAULT 'manual';
+
+ALTER TABLE pending_payments
+  ADD COLUMN IF NOT EXISTS external_payment_id TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_pending_payments_external_id
+  ON pending_payments (external_payment_id)
+  WHERE external_payment_id IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_pending_payments_user_status
   ON pending_payments (user_id, status);

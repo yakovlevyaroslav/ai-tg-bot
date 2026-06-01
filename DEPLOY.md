@@ -76,27 +76,34 @@ pm2 save
 pm2 startup
 ```
 
+Два процесса:
+- **ai-tg-bot** — Telegram-бот
+- **ai-tg-site** — лендинг, админка, webhook ЮKassa
+
 Проверка:
 
 ```bash
 pm2 status
 pm2 logs ai-tg-bot
+pm2 logs ai-tg-site
 ```
 
 В логах: `Bot is running`. В Telegram: `/start`.
 
 ---
 
-## 4. Админка
+## 4. Админка и сайт
 
-Слушает только `localhost:3080` на сервере. С **Mac**:
+**Локально:** http://localhost:3080/admin (SSH-тunnel не нужен на Mac).
+
+**Production с доменом:** см. [deploy/DOMAIN.md](./deploy/DOMAIN.md) — лендинг, HTTPS, админка и webhook ЮKassa.
+
+Кратко:
 
 ```bash
-ssh -L 3080:127.0.0.1:3080 root@ВАШ_IP
+# .env: PUBLIC_SITE_URL, PUBLIC_BOT_USERNAME, ADMIN_WEB_HOST=127.0.0.1
+sudo bash deploy/setup-domain.sh ваш-домен.ru admin@ваш-домен.ru
 ```
-
-Браузер: http://localhost:3080/admin  
-Логин: `ADMIN_WEB_USER` / `ADMIN_WEB_PASSWORD` из `.env`.
 
 ---
 
@@ -107,10 +114,10 @@ cd ~/projects/ai-tg-bot   # ваш путь
 git pull
 npm ci --omit=dev
 npm run db:init
-pm2 restart ai-tg-bot
+pm2 restart ai-tg-bot ai-tg-site
 ```
 
-После смены `.env` (токен, ключи): только `pm2 restart ai-tg-bot`.
+После смены `.env` (токен, ключи): только `pm2 restart ai-tg-bot ai-tg-site`.
 
 ---
 
@@ -121,7 +128,7 @@ pm2 restart ai-tg-bot
 | `ECONNREFUSED :5432` | `docker compose -f docker-compose.prod.yml up -d`, проверьте `DATABASE_URL` |
 | `getMe` 404 | Неверный `TELEGRAM_BOT_TOKEN` |
 | Timeout к Telegram | `curl -s "https://api.telegram.org/bot$TOKEN/getMe"`, затем `git pull` и `pm2 restart` |
-| Админка не открывается | SSH-туннель должен быть запущен до открытия браузера |
+| Админка не открывается | С доменом: `https://домен/admin`. Локально: порт 3080, `ADMIN_WEB_PASSWORD` в `.env` |
 
 Проверка токена:
 

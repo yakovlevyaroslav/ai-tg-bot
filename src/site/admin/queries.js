@@ -1,4 +1,4 @@
-import { getPool } from '../db.js';
+import { getPool } from '../../shared/db.js';
 
 const USERS_PER_PAGE = 25;
 const TX_PER_PAGE = 30;

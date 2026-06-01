@@ -20,7 +20,7 @@ export async function cancelPendingForUser(userId) {
   );
 }
 
-export async function createTopupRequest(userId, rubAmount) {
+export async function createTopupRequest(userId, rubAmount, provider = 'manual') {
   const credits = creditsFromRub(rubAmount);
   if (credits <= 0) {
     throw new Error('Invalid top-up amount');
@@ -29,13 +29,20 @@ export async function createTopupRequest(userId, rubAmount) {
   const paymentCode = generatePaymentCode();
 
   const { rows } = await pool.query(
-    `INSERT INTO pending_payments (user_id, payment_code, rub_amount, credits_amount)
-     VALUES ($1, $2, $3, $4)
-     RETURNING id, payment_code, rub_amount, credits_amount, created_at`,
-    [userId, paymentCode, rubAmount, credits],
+    `INSERT INTO pending_payments (user_id, payment_code, rub_amount, credits_amount, provider)
+     VALUES ($1, $2, $3, $4, $5)
+     RETURNING id, payment_code, rub_amount, credits_amount, provider, created_at`,
+    [userId, paymentCode, rubAmount, credits, provider],
   );
 
   return rows[0];
+}
+
+export async function attachExternalPaymentId(pendingId, externalPaymentId) {
+  await pool.query(
+    `UPDATE pending_payments SET external_payment_id = $2 WHERE id = $1`,
+    [pendingId, externalPaymentId],
+  );
 }
 
 export async function getPendingByCode(paymentCode) {
@@ -92,6 +99,76 @@ export async function confirmPayment(paymentCode, adminTelegramId) {
     balanceAfter: grantResult.balanceAfter,
     alreadyGranted: grantResult.alreadyGranted,
   };
+}
+
+export async function completeYookassaPayment(paymentCode, yookassaPaymentId) {
+  const pending = await getPendingByCode(paymentCode);
+
+  if (!pending) {
+    return { ok: false, reason: 'not_found' };
+  }
+
+  if (pending.status === 'completed') {
+    return { ok: false, reason: 'already_completed', pending };
+  }
+
+  if (pending.status === 'cancelled') {
+    return { ok: false, reason: 'cancelled', pending };
+  }
+
+  if (pending.provider !== 'yookassa') {
+    return { ok: false, reason: 'wrong_provider', pending };
+  }
+
+  const idempotencyKey = `purchase:yookassa:${yookassaPaymentId}`;
+
+  const grantResult = await billing.grant(
+    pending.user_id,
+    Number(pending.credits_amount),
+    'purchase',
+    {
+      rubAmount: pending.rub_amount,
+      paymentCode: pending.payment_code,
+      yookassaPaymentId,
+      provider: 'yookassa',
+    },
+    idempotencyKey,
+  );
+
+  await pool.query(
+    `UPDATE pending_payments
+     SET status = 'completed', completed_at = NOW(), external_payment_id = $2
+     WHERE id = $1`,
+    [pending.id, yookassaPaymentId],
+  );
+
+  return {
+    ok: true,
+    pending,
+    balanceAfter: grantResult.balanceAfter,
+    alreadyGranted: grantResult.alreadyGranted,
+  };
+}
+
+export async function getPendingYookassaForUser(userId) {
+  const { rows } = await pool.query(
+    `SELECT *
+     FROM pending_payments
+     WHERE user_id = $1
+       AND status = 'pending'
+       AND provider = 'yookassa'
+       AND external_payment_id IS NOT NULL
+     ORDER BY created_at DESC`,
+    [userId],
+  );
+  return rows;
+}
+
+export async function markPendingCancelled(pendingId) {
+  await pool.query(
+    `UPDATE pending_payments SET status = 'cancelled' WHERE id = $1 AND status = 'pending'`,
+    [pendingId],
+  );
 }
 
 export function buildPaymentInstructions(pending) {

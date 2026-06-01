@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Markup } from 'telegraf';
-import { config } from './config.js';
+import { config } from '../shared/config.js';
 
 const promptsDir = join(dirname(fileURLToPath(import.meta.url)), '../prompts/specialists');
 

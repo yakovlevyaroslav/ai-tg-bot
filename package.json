@@ -2,11 +2,14 @@
   "name": "ai-tg-bot",
   "version": "1.0.0",
   "description": "Telegram bot with ChatGPT API and PostgreSQL",
-  "main": "src/index.js",
   "type": "module",
   "scripts": {
     "start": "node src/index.js",
+    "start:bot": "node src/bot/index.js",
+    "start:site": "node src/site/index.js",
     "dev": "node --watch src/index.js",
+    "dev:bot": "node --watch src/bot/index.js",
+    "dev:site": "node --watch src/site/index.js",
     "db:init": "node scripts/init-db.js"
   },
   "engines": {
