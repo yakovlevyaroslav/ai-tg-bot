@@ -18,7 +18,10 @@ export function createYookassaWebhookHandler({ notifyUser }) {
       const event = req.body?.event;
       const payment = req.body?.object;
 
+      console.log(`[yookassa] webhook received: event=${event} payment=${payment?.id} ip=${clientIp}`);
+
       if (event !== 'payment.succeeded' || !payment?.id) {
+        console.log(`[yookassa] webhook ignored (not payment.succeeded)`);
         res.status(200).send('');
         return;
       }
@@ -31,8 +34,13 @@ export function createYookassaWebhookHandler({ notifyUser }) {
       }
 
       const result = await payments.completeYookassaPayment(paymentCode, payment.id);
+      console.log(
+        `[yookassa] processed: code=${paymentCode} ok=${result.ok}` +
+          (result.alreadyGranted ? ' (already granted)' : '') +
+          (result.reason ? ` reason=${result.reason}` : ''),
+      );
 
-      if (result.ok && notifyUser) {
+      if (result.ok && !result.alreadyGranted && notifyUser) {
         await notifyUser(result);
       }
 
