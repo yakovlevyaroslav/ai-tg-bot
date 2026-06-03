@@ -6,7 +6,7 @@ Telegram-бот на Node.js с ChatGPT (или mock-режимом), истор
 
 💳 **Оплата и тарифы:** [PAYMENTS.md](./PAYMENTS.md) — ЮKassa, webhook, где менять пакеты и курс.
 
-🚀 **Деплой на VPS:** [DEPLOY.md](./DEPLOY.md) · **Домен + webhook:** [deploy/DOMAIN.md](./deploy/DOMAIN.md)
+🚀 **Деплой на VPS:** [DEPLOY.md](./DEPLOY.md) · **Домен + webhook:** [deploy/DOMAIN.md](./deploy/DOMAIN.md) · **HTTP-прокси (Squid):** [deploy/SQUID-PROXY.md](./deploy/SQUID-PROXY.md)
 
 ## Стек
 
@@ -85,7 +85,7 @@ src/
     server.js, landing.js, admin/
   shared/        — общее: БД, биллинг, ЮKassa, config
 sql/init.sql
-deploy/          — nginx, домен, SSL
+deploy/          — nginx, домен, SSL, Squid-прокси
 ```
 
 **Локально:** `npm run dev` — бот + сайт вместе  

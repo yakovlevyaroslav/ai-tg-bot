@@ -98,6 +98,8 @@ pm2 logs ai-tg-site
 
 **Production с доменом:** см. [deploy/DOMAIN.md](./deploy/DOMAIN.md) — лендинг, HTTPS, админка и webhook ЮKassa.
 
+**Отдельный HTTP-прокси (Squid на другом VPS):** [deploy/SQUID-PROXY.md](./deploy/SQUID-PROXY.md).
+
 Кратко:
 
 ```bash
