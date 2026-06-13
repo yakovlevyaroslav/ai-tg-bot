@@ -14,7 +14,7 @@ import {
   enrichOnboardingDataWithCodes,
 } from '../shared/onboarding-context.js';
 import { getUserErrorMessage } from '../shared/errors.js';
-import { buildWelcomeText } from '../shared/welcome-message.js';
+import { buildWelcomeText, WELCOME_MESSAGE_PARSE_MODE } from '../shared/welcome-message.js';
 
 const MESSAGES = {
   askName:
@@ -258,7 +258,7 @@ async function resolveBirthPlaceInput(ctx, userId, optionsPromise) {
 export async function startOnboarding(ctx, userId) {
   await db.resetOnboarding(userId);
   await dismissLegacyReplyKeyboard(ctx);
-  await ctx.reply(buildWelcomeText(ctx.from?.id));
+  await ctx.reply(buildWelcomeText(ctx.from?.id), { parse_mode: WELCOME_MESSAGE_PARSE_MODE });
   await delay();
   await ctx.reply(MESSAGES.askName);
   await db.setOnboardingStep(userId, 'await_name');
