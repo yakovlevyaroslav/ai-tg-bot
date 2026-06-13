@@ -1,11 +1,11 @@
-import { formatTokens } from './requests-format.js';
+import { formatQuestions } from './requests-format.js';
 
 export function getUserErrorMessage(err) {
   if (err?.code === 'INSUFFICIENT_CREDITS') {
     return (
-      `Недостаточно токенов.\n` +
-      `Осталось: ${formatTokens(err.balance)}, нужно: ${formatTokens(err.required)}.\n\n` +
-      '1 токен = 1 вопрос. Пополните баланс, нажмите «Тарифы» ниже.'
+      `Недостаточно вопросов.\n` +
+      `Осталось: ${formatQuestions(err.balance)}, нужно: ${formatQuestions(err.required)}.\n\n` +
+      'Пополните баланс — нажмите «Тарифы» ниже.'
     );
   }
 

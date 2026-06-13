@@ -1,5 +1,5 @@
 import { config } from './config.js';
-import { formatTokens } from './requests-format.js';
+import { formatQuestions } from './requests-format.js';
 
 const PACKAGE_EMOJIS = ['💫', '✨', '🔮', '💎', '🌟'];
 const PACKAGE_TITLES = ['Стартовый', 'Популярный', 'Глубокий', 'Премиум', 'Максимум'];
@@ -72,17 +72,17 @@ export function getPackagePresentation(pkg, publicIndex = 0) {
 
 export function formatTariffPackageLine(pkg, publicIndex = 0) {
   const { emoji, title } = getPackagePresentation(pkg, publicIndex);
-  return `${emoji} ${title} — ${pkg.rub} ₽ · ${formatTokens(pkg.requests)}`;
+  return `${emoji} ${title} — ${pkg.rub} ₽ · ${formatQuestions(pkg.requests)}`;
 }
 
 export function formatTariffsMessage(telegramId = null) {
   const packages =
     telegramId != null ? getTopupPackagesForUser(telegramId) : config.topupPackages;
 
-  const freeTokens =
+  const freeQuestions =
     config.welcomeBonusRequests > 0
-      ? `🎁 Бесплатно при регистрации: ${formatTokens(config.welcomeBonusRequests)}`
-      : '🎁 Бесплатно при регистрации: 1 токен';
+      ? `🎁 Бесплатно при регистрации: ${formatQuestions(config.welcomeBonusRequests)}`
+      : '🎁 Бесплатно при регистрации: 1 вопрос';
 
   let publicIndex = 0;
   const packageLines = packages.map((pkg) => {
@@ -95,9 +95,9 @@ export function formatTariffsMessage(telegramId = null) {
 
   return (
     '📋 Тарифы\n\n' +
-    '1 токен = 1 развёрнутый ответ с учётом вашего кода личности.\n\n' +
-    `${freeTokens}\n\n` +
-    'Пакеты токенов:\n' +
+    'Каждый ответ — один вопрос с учётом вашего кода личности.\n\n' +
+    `${freeQuestions}\n\n` +
+    'Пакеты вопросов:\n' +
     `${packageLines.join('\n')}\n\n` +
     'Выберите пакет ниже 👇'
   );
@@ -108,7 +108,7 @@ export function formatPackagesLine(telegramId = null) {
     telegramId != null ? getTopupPackagesForUser(telegramId) : config.topupPackages;
 
   return packages
-    .map(({ rub, requests }) => `${rub} ₽ — ${formatTokens(requests)}`)
+    .map(({ rub, requests }) => `${rub} ₽ — ${formatQuestions(requests)}`)
     .join('\n');
 }
 
@@ -117,6 +117,6 @@ export function formatPackagesInline(telegramId = null) {
     telegramId != null ? getTopupPackagesForUser(telegramId) : config.topupPackages;
 
   return packages
-    .map(({ rub, requests }) => `${rub} ₽ → ${formatTokens(requests)}`)
+    .map(({ rub, requests }) => `${rub} ₽ → ${formatQuestions(requests)}`)
     .join(' · ');
 }

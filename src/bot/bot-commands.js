@@ -2,14 +2,15 @@ import { isAdminTelegramId } from '../shared/pricing.js';
 
 const USER_COMMANDS = [
   { command: 'start', description: 'Пройти анкету заново' },
-  { command: 'balance', description: 'Баланс токенов' },
+  { command: 'balance', description: 'Баланс вопросов' },
+  { command: 'restart', description: 'Сбросить и начать заново' },
 ];
 
 const ADMIN_COMMANDS = [
   { command: 'start', description: 'Пройти анкету заново' },
-  { command: 'balance', description: 'Баланс токенов' },
-  { command: 'topup', description: 'Купить токены' },
-  { command: 'restart', description: 'Сбросить историю диалога' },
+  { command: 'balance', description: 'Баланс вопросов' },
+  { command: 'topup', description: 'Купить вопросы' },
+  { command: 'restart', description: 'Сбросить и начать заново' },
   { command: 'help', description: 'Справка по командам' },
   { command: 'skip_onboarding', description: 'Пропустить анкету (админ)' },
 ];

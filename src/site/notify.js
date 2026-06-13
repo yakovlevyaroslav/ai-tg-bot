@@ -1,12 +1,12 @@
 import { config } from '../shared/config.js';
 import { postActionsInlineKeyboard } from '../bot/keyboards.js';
-import { formatTokens } from '../shared/requests-format.js';
+import { formatQuestions } from '../shared/requests-format.js';
 
 export function buildPaymentSuccessText(result) {
   return (
     `✅ Оплата прошла успешно!\n\n` +
-    `+${formatTokens(result.pending.credits_amount)}\n` +
-    `Осталось: ${formatTokens(result.balanceAfter)}`
+    `+${formatQuestions(result.pending.credits_amount)}\n` +
+    `Осталось: ${formatQuestions(result.balanceAfter)}`
   );
 }
 

@@ -15,7 +15,7 @@ import { syncUserBotCommands } from './bot-commands.js';
 import { isAdmin } from './admin-commands.js';
 import { checkCooldown } from './rate-limit.js';
 import { formatPackagesInline } from '../shared/pricing.js';
-import { formatTokens, formatQuestions } from '../shared/requests-format.js';
+import { formatQuestions } from '../shared/requests-format.js';
 import {
   sendTopupMenu,
   handleTopupCallback,
@@ -66,9 +66,9 @@ function splitMessage(text) {
 
 function formatBalanceLine(balance, charged = null) {
   if (charged !== null) {
-    return `\n\n−${formatTokens(charged)} · осталось: ${formatTokens(balance)}`;
+    return `\n\n−${formatQuestions(charged)} · осталось: ${formatQuestions(balance)}`;
   }
-  return `\n\nОсталось: ${formatTokens(balance)}`;
+  return `\n\nОсталось: ${formatQuestions(balance)}`;
 }
 
 function shouldOfferTariffs(balance) {
@@ -97,22 +97,20 @@ async function sendBalance(ctx, userId = null) {
 
   let text =
     '💰 Баланс\n\n' +
-    `Осталось: ${formatTokens(balance)}\n` +
-    `Задано вопросов: ${formatQuestions(questionsAsked)}\n\n` +
-    '1 токен = 1 вопрос.';
+    `Осталось: ${formatQuestions(balance)}\n` +
+    `Задано вопросов: ${formatQuestions(questionsAsked)}`;
 
   if (yookassaSync) {
     text =
-      `✅ Зачислено +${formatTokens(yookassaSync.pending.credits_amount)} после оплаты\n\n` + text;
+      `✅ Зачислено +${formatQuestions(yookassaSync.pending.credits_amount)} после оплаты\n\n` + text;
   }
 
   await ctx.reply(text, balanceTariffsInlineKeyboard());
 }
 
-async function sendRestart(ctx) {
-  const { userId } = await registerUser(ctx);
+async function sendRestart(ctx, userId) {
   await db.clearHistory(userId);
-  await ctx.reply('Диалог перезапущен. История очищена — можете писать заново.');
+  await startOnboarding(ctx, userId);
 }
 
 async function buildMessages(userId) {
@@ -217,10 +215,7 @@ async function handleMenuCommand(ctx, userId, command) {
       await sendTopupMenu(ctx);
       return;
     case 'restart':
-      if (!isAdmin(ctx.from.id)) {
-        return;
-      }
-      await sendRestart(ctx);
+      await sendRestart(ctx, userId);
       return;
     case 'help':
       if (!isAdmin(ctx.from.id)) {
@@ -229,11 +224,11 @@ async function handleMenuCommand(ctx, userId, command) {
       await ctx.reply(
         'Команды бота:\n' +
           '/start — пройти анкету заново\n' +
-          '/balance — баланс токенов и статистика\n' +
-          `/topup — купить токены (${formatPackagesInline(ctx.from.id)})\n` +
+          '/balance — баланс вопросов и статистика\n' +
+          `/topup — купить вопросы (${formatPackagesInline(ctx.from.id)})\n` +
           '/restart — сбросить историю диалога\n' +
           '/skip_onboarding — пропустить анкету\n\n' +
-          '1 токен = 1 вопрос.',
+          '1 вопрос = 1 развёрнутый ответ.',
       );
       return;
     case 'skip_onboarding':
@@ -279,11 +274,11 @@ export function createBot() {
     let text =
       'Команды бота:\n' +
       '/start — пройти анкету заново\n' +
-      '/balance — баланс токенов и статистика\n' +
-      `/topup — купить токены (${formatPackagesInline(ctx.from.id)})\n` +
+      '/balance — баланс вопросов и статистика\n' +
+      `/topup — купить вопросы (${formatPackagesInline(ctx.from.id)})\n` +
       '/restart — сбросить историю диалога\n' +
       '/skip_onboarding — пропустить анкету\n\n' +
-      '1 токен = 1 вопрос.';
+      '1 вопрос = 1 развёрнутый ответ.';
 
     if (config.aiProvider === 'mock') {
       text += '\n\n⚙️ Режим mock — ответы без OpenAI (разработка).';
@@ -492,6 +487,11 @@ export function createBot() {
 
     if (profile?.onboarding_step === 'custom_question') {
       await startPendingQuestion(ctx, userId, text);
+      return;
+    }
+
+    if (profile?.onboarding_completed) {
+      await handleChatMessage(ctx, userId, text);
       return;
     }
   });

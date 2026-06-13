@@ -6,7 +6,7 @@ import {
   getPackagePresentation,
   resolveTopupPackage,
 } from '../shared/pricing.js';
-import { formatTokens } from '../shared/requests-format.js';
+import { formatQuestions } from '../shared/requests-format.js';
 import {
   startTopupPayment,
   syncUserYookassaPayments,
@@ -61,9 +61,9 @@ function buildPaymentInstructionsMessage(pending) {
   const support = config.paymentSupportUsername;
 
   return (
-    `💳 Оплата — ${pending.rub_amount} ₽ · ${formatTokens(pending.credits_amount)}\n\n` +
+    `💳 Оплата — ${pending.rub_amount} ₽ · ${formatQuestions(pending.credits_amount)}\n\n` +
     '⚠️ Перед оплатой выключите VPN — иначе платёж может не пройти.\n\n' +
-    'После оплаты токены начисляются автоматически. ' +
+    'После оплаты вопросы начисляются автоматически. ' +
     'Обычно это занимает до 10 минут, но иногда задержка может быть 1–2 часа.\n\n' +
     `Если возникнут сложности с оплатой — напишите админу: ${support}`
   );
@@ -89,8 +89,8 @@ export async function handleTopupAmount(ctx, userId, rub) {
   if (synced.length > 0) {
     const last = synced[synced.length - 1];
     await ctx.reply(
-      `✅ Оплата прошла!\n\n+${formatTokens(last.pending.credits_amount)}\n` +
-        `Осталось: ${formatTokens(last.balanceAfter)}`,
+      `✅ Оплата прошла!\n\n+${formatQuestions(last.pending.credits_amount)}\n` +
+        `Осталось: ${formatQuestions(last.balanceAfter)}`,
     );
     return;
   }
@@ -153,7 +153,7 @@ export async function handleCheckPaymentCallback(ctx, userId, paymentCode) {
     }
 
     if (result.ok && result.alreadyGranted) {
-      await ctx.answerCbQuery('Токены уже начислены');
+      await ctx.answerCbQuery('Вопросы уже начислены');
       return;
     }
 
