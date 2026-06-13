@@ -1,7 +1,7 @@
 import { Markup } from 'telegraf';
 import { config } from '../shared/config.js';
 import * as db from '../shared/db.js';
-import { birthPlacesFromCoordinates, searchBirthPlaces } from '../shared/geocoding.js';
+import { searchBirthPlaces } from '../shared/geocoding.js';
 import {
   generatePersonalityCode,
   splitPersonalityCodeReply,
@@ -27,8 +27,7 @@ const MESSAGES = {
   askBirthTime:
     'Напиши время рождения в формате: 18:47\n(если не знаешь точное, напиши примерное):',
   askBirthPlace:
-    'И последнее — город или населённый пункт рождения. Например, Москва\n\n' +
-    'Также ты можешь прикрепить геолокацию 📎 — нажми скрепку ниже и выбери «Локация».',
+    'И последнее — город или населённый пункт рождения. Например, Москва',
   chooseBirthPlace: 'Выберите населённый пункт из списка:',
   confirmHint: 'Всё верно? Нажмите кнопку ниже 👇',
   thinking:
@@ -69,12 +68,6 @@ function genderKeyboard() {
     [Markup.button.callback('Мужской', 'onboard:gender:male')],
     [Markup.button.callback('Женский', 'onboard:gender:female')],
   ]);
-}
-
-function birthPlaceInputKeyboard() {
-  return Markup.keyboard([[Markup.button.locationRequest('📎 Отправить геолокацию')]])
-    .resize()
-    .oneTime();
 }
 
 function truncateButtonLabel(label) {
@@ -173,7 +166,7 @@ async function askBirthTime(ctx, userId) {
 
 async function askBirthPlace(ctx, userId) {
   await delay();
-  await ctx.reply(MESSAGES.askBirthPlace, birthPlaceInputKeyboard());
+  await ctx.reply(MESSAGES.askBirthPlace, dismissReplyKeyboard());
   await db.setOnboardingStep(userId, 'await_birth_place');
 }
 
@@ -249,18 +242,12 @@ async function resolveBirthPlaceInput(ctx, userId, optionsPromise) {
     options = await optionsPromise;
   } catch (err) {
     console.error('Geocoding error:', err?.message ?? err);
-    await ctx.reply(
-      'Не удалось определить место. Напишите название ещё раз или отправьте геолокацию 📎',
-      birthPlaceInputKeyboard(),
-    );
+    await ctx.reply('Не удалось определить место. Напишите название ещё раз.');
     return;
   }
 
   if (!options.length) {
-    await ctx.reply(
-      'Такой населённый пункт не найден. Уточните название или отправьте геолокацию 📎',
-      birthPlaceInputKeyboard(),
-    );
+    await ctx.reply('Такой населённый пункт не найден. Уточните название.');
     return;
   }
 
@@ -358,7 +345,7 @@ export async function handleOnboardingText(ctx, userId, text, profile) {
   if (step === 'await_birth_place') {
     const query = text.trim();
     if (!query || query.length > 120) {
-      await ctx.reply('Напишите название города или отправьте геолокацию 📎', birthPlaceInputKeyboard());
+      await ctx.reply('Напишите название города.');
       return true;
     }
 
@@ -372,19 +359,6 @@ export async function handleOnboardingText(ctx, userId, text, profile) {
   }
 
   return false;
-}
-
-export async function handleOnboardingLocation(ctx, userId, location) {
-  const profile = await db.getUserProfile(userId);
-  if (!profile || profile.onboarding_step !== 'await_birth_place') {
-    return;
-  }
-
-  await resolveBirthPlaceInput(
-    ctx,
-    userId,
-    birthPlacesFromCoordinates(location.latitude, location.longitude),
-  );
 }
 
 export async function handleOnboardingGender(ctx, userId, gender) {
@@ -419,9 +393,9 @@ export async function handleOnboardingPlaceChoice(ctx, userId, index) {
   const place = Array.isArray(options) ? options[Number(index)] : null;
 
   if (!place) {
-    await ctx.answerCbQuery('Вариант устарел — отправьте название или геолокацию снова');
+    await ctx.answerCbQuery('Вариант устарел — напишите название снова');
     await db.setOnboardingStep(userId, 'await_birth_place');
-    await ctx.reply(MESSAGES.askBirthPlace, birthPlaceInputKeyboard());
+    await ctx.reply(MESSAGES.askBirthPlace, dismissReplyKeyboard());
     return;
   }
 

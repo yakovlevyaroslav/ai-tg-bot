@@ -25,7 +25,6 @@ import {
   startOnboarding,
   handleOnboardingText,
   handleOnboardingGender,
-  handleOnboardingLocation,
   handleOnboardingPlaceChoice,
   handleOnboardingConfirm,
   skipOnboardingForAdmin,
@@ -433,15 +432,6 @@ export function createBot() {
   bot.action('post:tariffs:back', async (ctx) => {
     await ctx.answerCbQuery();
     await ctx.reply(POST_ONBOARDING_TEXT, postOnboardingInlineKeyboard());
-  });
-
-  bot.on('location', async (ctx) => {
-    const { userId } = await registerUser(ctx);
-    const profile = await db.getUserProfile(userId);
-    if (!isOnboardingBlocking(profile)) {
-      return;
-    }
-    await handleOnboardingLocation(ctx, userId, ctx.message.location);
   });
 
   bot.on('text', async (ctx) => {
