@@ -5,6 +5,28 @@ import { resolve } from 'node:path';
 const DEFAULT_SYSTEM_PROMPT =
   'Ты полезный ассистент в Telegram. Отвечай кратко и по делу на русском языке.';
 
+function loadWelcomeMessageTemplate() {
+  const filePath = process.env.WELCOME_MESSAGE_FILE?.trim();
+
+  if (filePath) {
+    const absolute = resolve(process.cwd(), filePath);
+    if (!existsSync(absolute)) {
+      console.warn(
+        `[config] WELCOME_MESSAGE_FILE not found: ${absolute} — using default welcome message`,
+      );
+      return null;
+    }
+    return readFileSync(absolute, 'utf8').trim();
+  }
+
+  const inline = process.env.WELCOME_MESSAGE?.trim();
+  if (inline) {
+    return inline.replace(/\\n/g, '\n');
+  }
+
+  return null;
+}
+
 function loadSystemPrompt() {
   const filePath = process.env.SYSTEM_PROMPT_FILE?.trim();
 
@@ -12,7 +34,7 @@ function loadSystemPrompt() {
     const absolute = resolve(process.cwd(), filePath);
     if (!existsSync(absolute)) {
       console.warn(
-        `[config] SYSTEM_PROMPT_FILE not found: ${absolute} — using default prompt (specialists use prompts/specialists/*.txt)`,
+        `[config] SYSTEM_PROMPT_FILE not found: ${absolute} — using default prompt`,
       );
       return DEFAULT_SYSTEM_PROMPT;
     }
@@ -47,11 +69,6 @@ function parseAdminIds(value) {
 }
 
 const aiProvider = (process.env.AI_PROVIDER || 'mock').toLowerCase();
-const paymentProvider = (process.env.PAYMENT_PROVIDER || 'manual').toLowerCase();
-
-if (paymentProvider !== 'manual' && paymentProvider !== 'yookassa' && paymentProvider !== 'instant') {
-  throw new Error('PAYMENT_PROVIDER must be manual, yookassa or instant');
-}
 
 function validateTelegramToken(token) {
   const cleaned = token.trim().replace(/^['"]|['"]$/g, '');
@@ -77,6 +94,50 @@ function validateTelegramToken(token) {
   return cleaned;
 }
 
+function parseTopupPackages(raw) {
+  const source = raw?.trim() || '200:5,300:10,500:20';
+
+  const packages = source
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => {
+      const [rubRaw, requestsRaw] = part.split(':').map((v) => v.trim());
+      const rub = Number(rubRaw);
+      const requests = Number(requestsRaw);
+      if (!Number.isFinite(rub) || !Number.isFinite(requests) || rub <= 0 || requests <= 0) {
+        return null;
+      }
+      return { rub, requests };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.rub - b.rub);
+
+  if (packages.length === 0) {
+    throw new Error(
+      'TOPUP_PACKAGES must contain at least one package (format: 200:5,300:10,500:20)',
+    );
+  }
+
+  return packages;
+}
+
+function parseAdminTopupPackage(raw) {
+  if (!raw?.trim() || raw.trim().toLowerCase() === 'off') {
+    return null;
+  }
+
+  const [rubRaw, requestsRaw] = raw.trim().split(':').map((v) => v.trim());
+  const rub = Number(rubRaw);
+  const requests = Number(requestsRaw);
+
+  if (!Number.isFinite(rub) || !Number.isFinite(requests) || rub <= 0 || requests <= 0) {
+    throw new Error('ADMIN_TOPUP_PACKAGE must be rub:requests (example: 1:10)');
+  }
+
+  return { rub, requests, adminOnly: true };
+}
+
 export const config = {
   telegramToken: validateTelegramToken(required('TELEGRAM_BOT_TOKEN')),
   databaseUrl: required('DATABASE_URL'),
@@ -86,19 +147,17 @@ export const config = {
   openaiBaseUrl: process.env.OPENAI_BASE_URL,
   historyLimit: Number(process.env.HISTORY_LIMIT || 20),
   systemPrompt: loadSystemPrompt(),
-  creditsPerMessage: Number(process.env.CREDITS_PER_MESSAGE || 10),
-  /** 100 ₽ = 1000 кредитов → 10 кредитов за 1 ₽ */
-  creditsPerRub: Number(process.env.CREDITS_PER_RUB || 10),
-  welcomeBonusCredits: Number(process.env.WELCOME_BONUS_CREDITS || 300),
-  topupPackagesRub: (process.env.TOPUP_PACKAGES_RUB || '1,100,500,1000')
-    .split(',')
-    .map((v) => Number(v.trim()))
-    .filter((n) => Number.isFinite(n) && n > 0),
-  paymentProvider,
-  paymentDetails:
-    process.env.PAYMENT_DETAILS ||
-    'Переведите сумму на карту (укажите в PAYMENT_DETAILS в .env).',
-  paymentSupportUsername: process.env.PAYMENT_SUPPORT_USERNAME || '',
+  /** Списание за один ответ бота (обычно 1) */
+  requestsPerMessage: Number(process.env.REQUESTS_PER_MESSAGE || 1),
+  /** Бесплатные вопросы при первом /start (0 — без бонуса) */
+  welcomeBonusRequests: Number(process.env.WELCOME_BONUS_REQUESTS || 0),
+  /** Шаблон приветствия на /start; null — текст по умолчанию. Плейсхолдеры: {packages}, {welcome_bonus_line}, {requests_per_message} */
+  welcomeMessageTemplate: loadWelcomeMessageTemplate(),
+  /** Тарифы: рубли:кол-во вопросов (публичные) */
+  topupPackages: parseTopupPackages(process.env.TOPUP_PACKAGES),
+  /** Тестовый тариф только для ADMIN_TELEGRAM_IDS */
+  adminTopupPackage: parseAdminTopupPackage(process.env.ADMIN_TOPUP_PACKAGE ?? '1:10'),
+  paymentSupportUsername: process.env.PAYMENT_SUPPORT_USERNAME || '@yakovlev_dev',
   yookassaShopId: process.env.YOOKASSA_SHOP_ID || '',
   yookassaSecretKey: process.env.YOOKASSA_SECRET_KEY || '',
   yookassaReturnUrl: process.env.YOOKASSA_RETURN_URL || 'https://t.me/',
@@ -132,27 +191,34 @@ export const config = {
   adminWebUser: process.env.ADMIN_WEB_USER || 'admin',
   adminWebPassword: process.env.ADMIN_WEB_PASSWORD || '',
   adminWebEnabled: Boolean(process.env.ADMIN_WEB_PASSWORD?.trim()),
-  /** HTTP-сервер нужен для админки и/или webhook ЮKassa */
-  webServerEnabled:
-    Boolean(process.env.ADMIN_WEB_PASSWORD?.trim()) || paymentProvider === 'yookassa',
+  /** HTTP-сервер: лендинг, webhook ЮKassa, админка */
+  webServerEnabled: true,
   messageCooldownMs: Number(process.env.MESSAGE_COOLDOWN_MS || 2000),
   maxMessageLength: Number(process.env.MAX_MESSAGE_LENGTH || 4000),
+  /** Пауза между шагами анкеты (мс) */
+  onboardingDelayMs: Number(process.env.ONBOARDING_DELAY_MS || 5000),
+  /** Пауза при расчёте кода личности — бот «думает» (мс) */
+  onboardingCalculationDelayMs: Number(process.env.ONBOARDING_CALCULATION_DELAY_MS || 15000),
+  /** Пауза после мистического пролога перед ответом на вопрос (мс) */
+  questionThinkingDelayMs: Number(process.env.QUESTION_THINKING_DELAY_MS || 4000),
+  /** Пауза перед предложением задать следующий вопрос (мс) */
+  postAnswerFollowupDelayMs: Number(process.env.POST_ANSWER_FOLLOWUP_DELAY_MS || 5000),
+  /** Порог: при остатке ниже — кнопка «Тарифы» под ответами после списания */
+  lowTokensTariffsThreshold: Number(process.env.LOW_TOKENS_TARIFFS_THRESHOLD || 3),
 };
 
 if (config.aiProvider === 'openai' && !config.openaiApiKey) {
   throw new Error('OPENAI_API_KEY is required when AI_PROVIDER=openai');
 }
 
-if (config.paymentProvider === 'yookassa') {
-  if (!config.yookassaShopId.trim()) {
-    throw new Error('YOOKASSA_SHOP_ID is required when PAYMENT_PROVIDER=yookassa');
-  }
-  if (!config.yookassaSecretKey.trim()) {
-    throw new Error('YOOKASSA_SECRET_KEY is required when PAYMENT_PROVIDER=yookassa');
-  }
-  if (config.yookassaSendReceipt && !config.yookassaReceiptEmail.trim()) {
-    throw new Error(
-      'YOOKASSA_RECEIPT_EMAIL is required — in YooKassa shop receipts (54-FZ) are enabled',
-    );
-  }
+if (!config.yookassaShopId.trim()) {
+  throw new Error('YOOKASSA_SHOP_ID is required');
+}
+if (!config.yookassaSecretKey.trim()) {
+  throw new Error('YOOKASSA_SECRET_KEY is required');
+}
+if (config.yookassaSendReceipt && !config.yookassaReceiptEmail.trim()) {
+  throw new Error(
+    'YOOKASSA_RECEIPT_EMAIL is required — in YooKassa shop receipts (54-FZ) are enabled',
+  );
 }

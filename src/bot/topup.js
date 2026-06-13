@@ -1,7 +1,12 @@
 import { Markup } from 'telegraf';
-import { config } from '../shared/config.js';
 import * as payments from '../shared/payments.js';
-import { formatRateLine, getTopupPackages } from '../shared/pricing.js';
+import {
+  formatTariffsMessage,
+  getTopupPackagesForUser,
+  getPackagePresentation,
+  resolveTopupPackage,
+} from '../shared/pricing.js';
+import { formatTokens } from '../shared/requests-format.js';
 import {
   startTopupPayment,
   syncUserYookassaPayments,
@@ -9,122 +14,131 @@ import {
 } from '../shared/yookassa/service.js';
 import { scheduleYookassaPaymentPoll } from '../shared/yookassa/poll.js';
 import { notifyPaymentSuccess } from '../site/notify.js';
-import { mainKeyboard, TOPUP_BACK } from './keyboards.js';
+import { config } from '../shared/config.js';
 
-export function topupAmountKeyboard() {
-  const packages = getTopupPackages();
-  const rows = [];
-
-  for (let i = 0; i < packages.length; i += 2) {
-    rows.push(packages.slice(i, i + 2).map(({ rub, credits }) => `${rub} ₽ · ${credits} кр.`));
-  }
-
-  rows.push([TOPUP_BACK]);
-  return Markup.keyboard(rows).resize().oneTime();
+function packageButtonLabel(pkg, publicIndex = 0) {
+  const { emoji, title } = getPackagePresentation(pkg, publicIndex);
+  return `${emoji} ${pkg.rub} ₽ · ${title}`;
 }
 
-export function parseTopupButton(text) {
-  const match = text.match(/^(\d+)\s*₽/);
-  if (!match) {
-    return null;
+function buildPackagesInlineKeyboard(telegramId, backCallback = 'buy:cancel') {
+  const packages = getTopupPackagesForUser(telegramId);
+  let publicIndex = 0;
+  const buttons = packages.map((pkg) => {
+    const isAdmin =
+      config.adminTopupPackage && pkg.rub === config.adminTopupPackage.rub;
+    const label = packageButtonLabel(pkg, isAdmin ? -1 : publicIndex);
+    if (!isAdmin) {
+      publicIndex += 1;
+    }
+    return Markup.button.callback(label, `buy:${pkg.rub}`);
+  });
+
+  const rows = [];
+  for (let i = 0; i < buttons.length; i += 2) {
+    rows.push(buttons.slice(i, i + 2));
   }
-  return Number(match[1]);
+  rows.push([Markup.button.callback('◀️ Назад', backCallback)]);
+
+  return Markup.inlineKeyboard(rows);
+}
+
+export function topupInlineKeyboard(telegramId) {
+  return buildPackagesInlineKeyboard(telegramId, 'buy:cancel');
+}
+
+export function tariffsInlineKeyboard(telegramId) {
+  return buildPackagesInlineKeyboard(telegramId, 'post:tariffs:back');
 }
 
 export async function sendTopupMenu(ctx) {
-  await ctx.reply(
-    `Пополнение баланса\n\n${formatRateLine()}\n\nВыберите сумму:`,
-    topupAmountKeyboard(),
+  const telegramId = ctx.from.id;
+  await ctx.reply(formatTariffsMessage(telegramId), topupInlineKeyboard(telegramId));
+}
+
+function buildPaymentInstructionsMessage(pending) {
+  const support = config.paymentSupportUsername;
+
+  return (
+    `💳 Оплата — ${pending.rub_amount} ₽ · ${formatTokens(pending.credits_amount)}\n\n` +
+    '⚠️ Перед оплатой выключите VPN — иначе платёж может не пройти.\n\n' +
+    'После оплаты токены начисляются автоматически. ' +
+    'Обычно это занимает до 10 минут, но иногда задержка может быть 1–2 часа.\n\n' +
+    `Если возникнут сложности с оплатой — напишите админу: ${support}`
   );
 }
 
+function paymentConfirmationKeyboard(pending, confirmationUrl) {
+  return Markup.inlineKeyboard([
+    [Markup.button.url(`💳 Оплатить (${pending.rub_amount} ₽)`, confirmationUrl)],
+    [Markup.button.callback('◀️ Назад', 'pay:back')],
+  ]);
+}
+
 export async function handleTopupAmount(ctx, userId, rub) {
-  const allowed = config.topupPackagesRub;
+  const telegramId = ctx.from.id;
+  const pkg = resolveTopupPackage(rub, telegramId);
 
-  if (!allowed.includes(rub)) {
-    await ctx.reply('Недоступная сумма. Выберите из предложенных.', topupAmountKeyboard());
+  if (!pkg) {
+    await ctx.reply('Недоступный пакет. Выберите из предложенных.', topupInlineKeyboard(telegramId));
     return;
   }
 
-  if (config.paymentProvider === 'yookassa') {
-    const synced = await syncUserYookassaPayments(userId);
-    if (synced.length > 0) {
-      const last = synced[synced.length - 1];
-      await ctx.reply(
-        `✅ Оплата прошла!\n\n+${last.pending.credits_amount} кредитов\n` +
-          `Баланс: ${last.balanceAfter} кредитов`,
-        mainKeyboard(),
-      );
-      return;
-    }
-  }
-
-  await payments.cancelPendingForUser(userId);
-
-  if (config.paymentProvider === 'yookassa') {
-    try {
-      const { pending, confirmationUrl } = await startTopupPayment(userId, rub);
-      scheduleYookassaPaymentPoll({
-        userId,
-        paymentCode: pending.payment_code,
-        onSuccess: notifyPaymentSuccess,
-      });
-
-      await ctx.reply(
-        `💳 Оплата ${pending.rub_amount} ₽ → ${pending.credits_amount} кредитов\n\n` +
-          '1. Нажмите «Оплатить» и завершите платёж на сайте ЮKassa\n' +
-          '2. Кредиты начислятся автоматически (обычно в течение минуты)\n\n' +
-          'Если не начислились — нажмите «Проверить оплату»',
-        Markup.inlineKeyboard([
-          [Markup.button.url('💳 Оплатить', confirmationUrl)],
-          [Markup.button.callback('🔄 Проверить оплату', `checkpay:${pending.payment_code}`)],
-        ]),
-      );
-      await ctx.reply('После оплаты можно вернуться в бот — баланс обновится сам', mainKeyboard());
-    } catch (err) {
-      console.error('[topup] yookassa error:', err?.message ?? err);
-      await ctx.reply(
-        `Не удалось создать платёж: ${err?.message ?? 'ошибка API'}\n\n` +
-          'Проверьте YOOKASSA_SHOP_ID и YOOKASSA_SECRET_KEY в .env',
-        mainKeyboard(),
-      );
-    }
-    return;
-  }
-
-  if (config.paymentProvider === 'instant') {
-    const pending = await payments.createTopupRequest(userId, rub);
-    const result = await payments.confirmPayment(pending.payment_code, 0);
-
+  const synced = await syncUserYookassaPayments(userId);
+  if (synced.length > 0) {
+    const last = synced[synced.length - 1];
     await ctx.reply(
-      `✅ Баланс пополнен!\n\n` +
-        `+${pending.credits_amount} кредитов (${pending.rub_amount} ₽)\n` +
-        `Текущий баланс: ${result.balanceAfter} кредитов`,
-      mainKeyboard(),
+      `✅ Оплата прошла!\n\n+${formatTokens(last.pending.credits_amount)}\n` +
+        `Осталось: ${formatTokens(last.balanceAfter)}`,
     );
     return;
   }
 
-  const pending = await payments.createTopupRequest(userId, rub);
+  await payments.cancelPendingForUser(userId);
 
-  await ctx.reply(payments.buildPaymentInstructions(pending), mainKeyboard());
+  try {
+    const { pending, confirmationUrl } = await startTopupPayment(userId, pkg.rub, pkg.requests);
+    scheduleYookassaPaymentPoll({
+      userId,
+      paymentCode: pending.payment_code,
+      onSuccess: notifyPaymentSuccess,
+    });
 
-  if (config.adminTelegramIds.length > 0) {
-    const userLabel = ctx.from.username
-      ? `@${ctx.from.username}`
-      : `${ctx.from.first_name ?? 'User'} (${ctx.from.id})`;
-
-    const adminText =
-      `🆕 Заявка на пополнение\n` +
-      `${userLabel}\n` +
-      `${pending.rub_amount} ₽ → ${pending.credits_amount} кредитов\n` +
-      `Код: ${pending.payment_code}\n\n` +
-      `/confirm ${pending.payment_code}`;
-
-    for (const adminId of config.adminTelegramIds) {
-      await ctx.telegram.sendMessage(adminId, adminText).catch(() => {});
-    }
+    await ctx.reply(
+      buildPaymentInstructionsMessage(pending),
+      paymentConfirmationKeyboard(pending, confirmationUrl),
+    );
+  } catch (err) {
+    console.error('[topup] yookassa error:', err?.message ?? err);
+    await ctx.reply(
+      `Не удалось создать платёж: ${err?.message ?? 'ошибка API'}\n\n` +
+        'Проверьте YOOKASSA_SHOP_ID и YOOKASSA_SECRET_KEY в .env',
+    );
   }
+}
+
+export async function handlePaymentBack(ctx, userId) {
+  await ctx.answerCbQuery();
+  await payments.cancelPendingForUser(userId);
+  await ctx.deleteMessage().catch(() => {});
+  await sendTopupMenu(ctx);
+}
+
+export async function handleBuyCallback(ctx, userId, rubRaw) {
+  if (rubRaw === 'cancel') {
+    await ctx.answerCbQuery();
+    await ctx.deleteMessage().catch(() => {});
+    return;
+  }
+
+  const rub = Number(rubRaw);
+  if (!Number.isFinite(rub)) {
+    await ctx.answerCbQuery('Неверный пакет');
+    return;
+  }
+
+  await ctx.answerCbQuery();
+  await handleTopupAmount(ctx, userId, rub);
 }
 
 export async function handleCheckPaymentCallback(ctx, userId, paymentCode) {
@@ -135,15 +149,14 @@ export async function handleCheckPaymentCallback(ctx, userId, paymentCode) {
       await ctx.answerCbQuery('Оплата получена!');
       await ctx.reply(
         `✅ Баланс пополнен!\n\n` +
-          `+${result.pending.credits_amount} кредитов\n` +
-          `Текущий баланс: ${result.balanceAfter} кредитов`,
-        mainKeyboard(),
+          `+${formatTokens(result.pending.credits_amount)}\n` +
+          `Осталось: ${formatTokens(result.balanceAfter)}`,
       );
       return;
     }
 
     if (result.ok && result.alreadyGranted) {
-      await ctx.answerCbQuery('Кредиты уже начислены');
+      await ctx.answerCbQuery('Вопросы уже начислены');
       return;
     }
 
@@ -165,21 +178,10 @@ export async function handleCheckPaymentCallback(ctx, userId, paymentCode) {
 
 /** @deprecated inline-кнопки из старых сообщений */
 export async function handleTopupCallback(ctx, userId, rubRaw) {
-  if (rubRaw === 'cancel') {
-    await ctx.answerCbQuery('Отменено');
-    await ctx.deleteMessage().catch(() => {});
-    return;
-  }
-
-  const rub = Number(rubRaw);
-  await ctx.answerCbQuery();
-  await handleTopupAmount(ctx, userId, rub);
+  await handleBuyCallback(ctx, userId, rubRaw);
 }
 
 export async function syncYookassaBeforeBalance(userId) {
-  if (config.paymentProvider !== 'yookassa') {
-    return null;
-  }
   const synced = await syncUserYookassaPayments(userId);
   return synced.length > 0 ? synced[synced.length - 1] : null;
 }

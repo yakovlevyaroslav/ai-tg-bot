@@ -5,6 +5,7 @@ import { ensureDatabase } from '../shared/ensure-database.js';
 import { initDb, closeDb } from '../shared/db.js';
 import { createBot } from './create-bot.js';
 import { formatTelegramStartError, launchBot } from './launch.js';
+import { setupDefaultBotCommands } from './bot-commands.js';
 
 export async function runBot({ setupSignals = true, skipInit = false } = {}) {
   if (!skipInit) {
@@ -35,6 +36,7 @@ export async function runBot({ setupSignals = true, skipInit = false } = {}) {
 
   console.log('Connecting to Telegram API...');
   await launchBot(bot);
+  await setupDefaultBotCommands(bot.telegram);
   botRunning = true;
   console.log(`Bot is running (AI_PROVIDER=${config.aiProvider})`);
 

@@ -37,7 +37,7 @@ export async function upsertUser({ telegramId, username, firstName }) {
      DO UPDATE SET
        username = EXCLUDED.username,
        first_name = EXCLUDED.first_name
-     RETURNING id, welcome_bonus_granted, specialist`,
+     RETURNING id, welcome_bonus_granted`,
     [telegramId, username ?? null, firstName ?? null],
   );
   return rows[0];
@@ -45,19 +45,12 @@ export async function upsertUser({ telegramId, username, firstName }) {
 
 export async function getUserProfile(userId) {
   const { rows } = await pool.query(
-    `SELECT id, telegram_id, username, first_name, specialist, welcome_bonus_granted
+    `SELECT id, telegram_id, username, first_name, welcome_bonus_granted,
+            onboarding_step, onboarding_data, onboarding_completed
      FROM users WHERE id = $1`,
     [userId],
   );
   return rows[0] ?? null;
-}
-
-export async function setUserSpecialist(userId, specialist) {
-  const { rows } = await pool.query(
-    `UPDATE users SET specialist = $2 WHERE id = $1 RETURNING specialist`,
-    [userId, specialist],
-  );
-  return rows[0]?.specialist ?? null;
 }
 
 export async function getUserIdByTelegramId(telegramId) {
@@ -85,7 +78,7 @@ export async function grantBotAccess({ telegramId, username, firstName }) {
        username = EXCLUDED.username,
        first_name = EXCLUDED.first_name,
        access_granted = TRUE
-     RETURNING id, access_granted, welcome_bonus_granted, specialist`,
+     RETURNING id, access_granted, welcome_bonus_granted`,
     [telegramId, username ?? null, firstName ?? null],
   );
   return rows[0];
@@ -110,8 +103,52 @@ export async function saveMessage(userId, role, content) {
   );
 }
 
+export async function countUserQuestionsAsked(userId) {
+  const { rows } = await pool.query(
+    `SELECT COUNT(*)::int AS count FROM usage_events WHERE user_id = $1`,
+    [userId],
+  );
+  return rows[0]?.count ?? 0;
+}
+
 export async function clearHistory(userId) {
   await pool.query(`DELETE FROM messages WHERE user_id = $1`, [userId]);
+}
+
+export async function resetOnboarding(userId) {
+  await pool.query(
+    `UPDATE users
+     SET onboarding_step = NULL,
+         onboarding_data = '{}',
+         onboarding_completed = FALSE
+     WHERE id = $1`,
+    [userId],
+  );
+}
+
+export async function setOnboardingStep(userId, step, dataPatch = null) {
+  if (dataPatch) {
+    await pool.query(
+      `UPDATE users
+       SET onboarding_step = $2,
+           onboarding_data = onboarding_data || $3::jsonb
+       WHERE id = $1`,
+      [userId, step, JSON.stringify(dataPatch)],
+    );
+    return;
+  }
+
+  await pool.query(
+    `UPDATE users SET onboarding_step = $2 WHERE id = $1`,
+    [userId, step],
+  );
+}
+
+export async function setOnboardingCompleted(userId, completed = true) {
+  await pool.query(
+    `UPDATE users SET onboarding_completed = $2 WHERE id = $1`,
+    [userId, completed],
+  );
 }
 
 export function getPool() {

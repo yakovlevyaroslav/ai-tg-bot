@@ -98,7 +98,7 @@ export function renderLandingPage() {
     <a class="cta" href="${escapeHtml(botLink)}" target="_blank" rel="noopener">Открыть бота в Telegram</a>
 
     <div class="foot">
-      <p>Оплата через ЮKassa · баланс в кредитах</p>
+      <p>Оплата через ЮKassa · пакеты вопросов</p>
       ${support ? `<p>Вопросы: <a href="https://t.me/${escapeHtml(support.replace(/^@/, ''))}">${escapeHtml(support)}</a></p>` : ''}
     </div>
   </div>

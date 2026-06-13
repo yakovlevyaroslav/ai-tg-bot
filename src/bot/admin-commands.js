@@ -1,10 +1,10 @@
 import { config } from '../shared/config.js';
 import * as billing from '../shared/billing.js';
 import * as db from '../shared/db.js';
-import * as payments from '../shared/payments.js';
+import { formatRequests } from '../shared/requests-format.js';
 
 export function isAdmin(telegramId) {
-  return config.adminTelegramIds.includes(telegramId);
+  return config.adminTelegramIds.includes(Number(telegramId));
 }
 
 export async function handleGrantCommand(ctx) {
@@ -13,8 +13,8 @@ export async function handleGrantCommand(ctx) {
   if (parts.length === 0) {
     await ctx.reply(
       'Использование:\n' +
-        '/grant <кредиты> — себе\n' +
-        '/grant <telegram_id> <кредиты> — другому пользователю',
+        '/grant <вопросы> — себе\n' +
+        '/grant <telegram_id> <вопросы> — другому пользователю',
     );
     return;
   }
@@ -31,7 +31,7 @@ export async function handleGrantCommand(ctx) {
   }
 
   if (!Number.isFinite(targetTelegramId) || !Number.isFinite(amount) || amount <= 0) {
-    await ctx.reply('Укажите корректные telegram_id и положительное число кредитов.');
+    await ctx.reply('Укажите корректные telegram_id и положительное число вопросов.');
     return;
   }
 
@@ -49,50 +49,7 @@ export async function handleGrantCommand(ctx) {
   });
 
   await ctx.reply(
-    `Начислено ${amount} кредитов пользователю ${targetTelegramId}.\n` +
-      `Баланс: ${result.balanceAfter}`,
+    `Начислено ${formatRequests(amount)} пользователю ${targetTelegramId}.\n` +
+      `Осталось: ${formatRequests(result.balanceAfter)}`,
   );
-}
-
-export async function handleConfirmCommand(ctx) {
-  const code = ctx.message.text.trim().split(/\s+/)[1];
-
-  if (!code) {
-    await ctx.reply(
-      'Использование: /confirm <код>\nПример: /confirm PAY-A1B2C3\n\n' +
-        'Подтверждает оплату после перевода по заявке пользователя.',
-    );
-    return;
-  }
-
-  const result = await payments.confirmPayment(code, ctx.from.id);
-
-  if (!result.ok) {
-    const messages = {
-      not_found: 'Заявка с таким кодом не найдена.',
-      already_completed: 'Эта заявка уже была подтверждена ранее.',
-      cancelled: 'Заявка отменена. Пользователь может создать новую через «Пополнить».',
-    };
-    await ctx.reply(messages[result.reason] ?? 'Не удалось подтвердить оплату.');
-    return;
-  }
-
-  const { pending, balanceAfter } = result;
-  const userTag = pending.username ? `@${pending.username}` : pending.telegram_id;
-
-  await ctx.reply(
-    `✅ Оплата ${pending.payment_code} подтверждена.\n` +
-      `Пользователь ${userTag}: +${pending.credits_amount} кредитов\n` +
-      `Баланс: ${balanceAfter}`,
-  );
-
-  try {
-    await ctx.telegram.sendMessage(
-      pending.telegram_id,
-      `✅ Зачислено ${pending.credits_amount} кредитов (${pending.rub_amount} ₽).\n` +
-        `Баланс: ${balanceAfter}`,
-    );
-  } catch {
-    await ctx.reply('Кредиты начислены, но не удалось уведомить пользователя в Telegram.');
-  }
 }

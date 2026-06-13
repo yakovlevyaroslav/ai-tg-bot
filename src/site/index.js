@@ -14,7 +14,7 @@ export async function runSite({ setupSignals = true, onPaymentSuccess = notifyPa
   const server = startSiteServer({ onPaymentSuccess });
 
   if (!server) {
-    throw new Error('Site server disabled — set ADMIN_WEB_PASSWORD or PAYMENT_PROVIDER=yookassa');
+    throw new Error('Site server failed to start');
   }
 
   const shutdown = async (signal) => {

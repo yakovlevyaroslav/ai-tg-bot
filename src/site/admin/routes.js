@@ -2,10 +2,11 @@ import express, { Router } from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as billing from '../../shared/billing.js';
-import * as payments from '../../shared/payments.js';
+import { InsufficientCreditsError } from '../../shared/billing.js';
 import { config } from '../../shared/config.js';
 import * as queries from './queries.js';
-import { formatSpecialistLine } from '../../bot/specialists.js';
+import { formatPackagesLine } from '../../shared/pricing.js';
+import { formatRequests } from '../../shared/requests-format.js';
 import {
   esc,
   formatDate,
@@ -28,15 +29,25 @@ const TX_LABELS = {
 
 function flashMessage(query) {
   if (query.ok === 'grant') {
-    return `<div class="flash flash-success">Кредиты начислены. Новый баланс: ${esc(formatCredits(query.balance))}</div>`;
+    return `<div class="flash flash-success">Начислено. Осталось: ${esc(formatRequests(query.balance))}</div>`;
   }
-  if (query.ok === 'confirm') {
-    return `<div class="flash flash-success">Оплата ${esc(query.code)} подтверждена.</div>`;
+  if (query.ok === 'deduct') {
+    return `<div class="flash flash-success">Списано. Осталось: ${esc(formatRequests(query.balance))}</div>`;
+  }
+  if (query.ok === 'set') {
+    return `<div class="flash flash-success">Баланс установлен: ${esc(formatRequests(query.balance))}</div>`;
+  }
+  if (query.ok === 'deleted') {
+    return `<div class="flash flash-success">Пользователь удалён.</div>`;
   }
   if (query.error) {
     return `<div class="flash flash-error">${esc(query.error)}</div>`;
   }
   return '';
+}
+
+function isProtectedAdminUser(user) {
+  return config.adminTelegramIds.includes(Number(user.telegram_id));
 }
 
 export function createAdminRouter() {
@@ -67,49 +78,44 @@ export function createAdminRouter() {
 
   router.get('/', async (req, res) => {
     const stats = await queries.getDashboardStats();
-    const pending = await queries.listPendingPayments(8);
+    const recent = await queries.listRecentCompletedPayments(8);
 
-    const pendingRows = pending.length
-      ? pending
+    const paymentRows = recent.length
+      ? recent
           .map(
             (p) => `<tr>
+          <td>${formatDate(p.completed_at || p.created_at)}</td>
+          <td><a href="/admin/users/${p.user_id}">${esc(userLabel(p))}</a></td>
+          <td>${esc(p.rub_amount)} ₽ → ${esc(formatRequests(p.credits_amount))}</td>
           <td><code>${esc(p.payment_code)}</code></td>
-          <td>${esc(userLabel(p))}</td>
-          <td>${esc(p.rub_amount)} ₽ → ${formatCredits(p.credits_amount)}</td>
-          <td>${formatDate(p.created_at)}</td>
-          <td>
-            <form method="post" action="/admin/payments/${esc(p.payment_code)}/confirm" style="display:inline">
-              <button type="submit" class="btn btn-sm btn-success">Подтвердить</button>
-            </form>
-          </td>
         </tr>`,
           )
           .join('')
-      : `<tr><td colspan="5" class="empty">Нет ожидающих заявок</td></tr>`;
+      : `<tr><td colspan="4" class="empty">Пока нет успешных оплат</td></tr>`;
 
     const body = `
       ${flashMessage(req.query)}
       <h1 class="page-title">Обзор</h1>
-      <p class="page-subtitle">AI_PROVIDER: ${esc(config.aiProvider)} · ${esc(formatCredits(config.creditsPerMessage))} кредитов за ответ</p>
+      <p class="page-subtitle">AI_PROVIDER: ${esc(config.aiProvider)} · ${esc(formatRequests(config.requestsPerMessage))} за ответ · оплата через ЮKassa</p>
       <div class="stats-grid">
         ${statCard('Пользователей', stats.users_count)}
-        ${statCard('Кредитов в системе', formatCredits(stats.total_credits))}
-        ${statCard('Ожидают оплаты', stats.pending_payments, 'заявок pending')}
+        ${statCard('Вопросов в системе', formatCredits(stats.total_credits))}
+        ${statCard('Оплат за 24ч', stats.purchases_24h, `${formatCredits(stats.revenue_rub_24h)} ₽`)}
         ${statCard('Сообщений за 24ч', stats.messages_24h)}
         ${statCard('Запросов AI за 24ч', stats.requests_24h)}
         ${statCard('Транзакций за 24ч', stats.transactions_24h)}
       </div>
       <div class="card">
-        <div class="card-header">Последние заявки на пополнение</div>
+        <div class="card-header">Последние оплаты</div>
         <div class="table-wrap">
           <table>
             <thead>
-              <tr><th>Код</th><th>Пользователь</th><th>Сумма</th><th>Создана</th><th></th></tr>
+              <tr><th>Дата</th><th>Пользователь</th><th>Сумма</th><th>Код</th></tr>
             </thead>
-            <tbody>${pendingRows}</tbody>
+            <tbody>${paymentRows}</tbody>
           </table>
         </div>
-        <p style="padding:0.75rem 1rem;margin:0"><a href="/admin/payments">Все пополнения →</a></p>
+        <p style="padding:0.75rem 1rem;margin:0"><a href="/admin/payments">Вся история оплат →</a></p>
       </div>
     `;
 
@@ -128,16 +134,15 @@ export function createAdminRouter() {
           <td><a href="/admin/users/${u.id}">#${u.id}</a></td>
           <td><code>${esc(u.telegram_id)}</code></td>
           <td>${esc(userLabel(u))}</td>
-          <td>${esc(formatSpecialistLine(u.specialist))}</td>
+          <td>${esc(u.personality_code || '—')}</td>
           <td><strong>${formatCredits(u.credits)}</strong></td>
           <td>${esc(u.messages_count)}</td>
-          <td>${u.pending_payments > 0 ? `<span class="badge badge-pending">${u.pending_payments}</span>` : '—'}</td>
           <td>${u.welcome_bonus_granted ? '<span class="badge badge-success">да</span>' : '<span class="badge badge-muted">нет</span>'}</td>
           <td>${formatDate(u.created_at)}</td>
         </tr>`,
           )
           .join('')
-      : `<tr><td colspan="9" class="empty">Пользователи не найдены</td></tr>`;
+      : `<tr><td colspan="8" class="empty">Пользователи не найдены</td></tr>`;
 
     const prev = page > 1 ? `/admin/users?page=${page - 1}&search=${encodeURIComponent(search)}` : null;
     const next = page < pages ? `/admin/users?page=${page + 1}&search=${encodeURIComponent(search)}` : null;
@@ -156,8 +161,8 @@ export function createAdminRouter() {
           <table>
             <thead>
               <tr>
-                <th>ID</th><th>Telegram</th><th>Имя</th><th>Специалист</th><th>Баланс</th>
-                <th>Сообщ.</th><th>Pending</th><th>Бонус</th><th>Регистрация</th>
+                <th>ID</th><th>Telegram</th><th>Имя</th><th>Код личности</th><th>Вопросов</th>
+                <th>Сообщ.</th><th>Бонус</th><th>Регистрация</th>
               </tr>
             </thead>
             <tbody>${rows}</tbody>
@@ -185,7 +190,8 @@ export function createAdminRouter() {
 
     const transactions = await queries.getUserTransactions(userId);
     const usage = await queries.getUserUsage(userId);
-    const grantError = req.query.error ? flashMessage(req.query) : '';
+    const pageFlash = req.query.error || req.query.ok ? flashMessage(req.query) : '';
+    const canDelete = !isProtectedAdminUser(user);
 
     const txRows = transactions.length
       ? transactions
@@ -208,32 +214,60 @@ export function createAdminRouter() {
             <td>${formatDate(u.created_at)}</td>
             <td>${esc(u.model || '—')}</td>
             <td>${esc(u.prompt_tokens)} / ${esc(u.completion_tokens)}</td>
-            <td>−${formatCredits(u.credits_charged)}</td>
+            <td>−${formatCredits(u.credits_charged)} вопр.</td>
           </tr>`,
           )
           .join('')
       : `<tr><td colspan="4" class="empty">Нет запросов к AI</td></tr>`;
 
     const body = `
-      ${grantError}
+      ${pageFlash}
       <p><a href="/admin/users">← Все пользователи</a></p>
       <h1 class="page-title">${esc(userLabel(user))}</h1>
-      <p class="page-subtitle">Telegram ID: <code>${esc(user.telegram_id)}</code></p>
+      <p class="page-subtitle">Telegram ID: <code>${esc(user.telegram_id)}</code> · внутр. ID: #${user.id}</p>
 
       <div class="detail-grid">
-        <div class="detail-item"><label>Специалист</label><span>${esc(formatSpecialistLine(user.specialist))}</span></div>
-        <div class="detail-item"><label>Баланс</label><span>${formatCredits(user.credits)} кредитов</span></div>
+        <div class="detail-item"><label>Код личности</label><span>${esc(user.personality_code || '—')}</span></div>
+        <div class="detail-item"><label>Осталось вопросов</label><span>${formatCredits(user.credits)}</span></div>
         <div class="detail-item"><label>Сообщений</label><span>${esc(user.messages_count)}</span></div>
         <div class="detail-item"><label>Регистрация</label><span>${formatDate(user.created_at)}</span></div>
         <div class="detail-item"><label>Стартовый бонус</label><span>${user.welcome_bonus_granted ? 'получен' : 'нет'}</span></div>
       </div>
 
       <div class="card">
-        <div class="card-header">Начислить кредиты</div>
-        <form method="post" action="/admin/users/${user.id}/grant" class="toolbar" style="padding:1rem">
-          <input type="number" name="amount" min="1" placeholder="Количество" required style="width:140px">
-          <button type="submit" class="btn">Начислить</button>
-        </form>
+        <div class="card-header">Управление балансом</div>
+        <div class="balance-actions">
+          <form method="post" action="/admin/users/${user.id}/grant" class="balance-form">
+            <span class="balance-form-label">+ Начислить</span>
+            <input type="number" name="amount" min="1" placeholder="Кол-во" required>
+            <button type="submit" class="btn btn-success btn-sm">Начислить</button>
+          </form>
+          <form method="post" action="/admin/users/${user.id}/deduct" class="balance-form">
+            <span class="balance-form-label">− Списать</span>
+            <input type="number" name="amount" min="1" placeholder="Кол-во" required>
+            <button type="submit" class="btn btn-sm">Списать</button>
+          </form>
+          <form method="post" action="/admin/users/${user.id}/set-balance" class="balance-form">
+            <span class="balance-form-label">= Установить</span>
+            <input type="number" name="balance" min="0" placeholder="Новый баланс" required>
+            <button type="submit" class="btn btn-sm">Установить</button>
+          </form>
+        </div>
+      </div>
+
+      <div class="card card-danger">
+        <div class="card-header">Удаление пользователя</div>
+        <div style="padding:1rem">
+          ${
+            canDelete
+              ? `<p class="muted-text">Будут удалены все данные: баланс, сообщения, история, платежи.</p>
+          <form method="post" action="/admin/users/${user.id}/delete"
+                onsubmit="return confirm('Удалить пользователя и все его данные? Это необратимо.');">
+            <button type="submit" class="btn btn-danger btn-sm">Удалить пользователя</button>
+          </form>`
+              : `<p class="muted-text">Этот пользователь в ADMIN_TELEGRAM_IDS — удаление запрещено.</p>`
+          }
+        </div>
       </div>
 
       <div class="card">
@@ -250,7 +284,7 @@ export function createAdminRouter() {
         <div class="card-header">Запросы к AI (последние)</div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Дата</th><th>Модель</th><th>Токены in/out</th><th>Кредиты</th></tr></thead>
+            <thead><tr><th>Дата</th><th>Модель</th><th>Токены in/out</th><th>Списано</th></tr></thead>
             <tbody>${usageRows}</tbody>
           </table>
         </div>
@@ -269,92 +303,148 @@ export function createAdminRouter() {
       return;
     }
 
+    const user = await queries.getUserById(userId);
+    if (!user) {
+      res.redirect('/admin/users?error=' + encodeURIComponent('Пользователь не найден'));
+      return;
+    }
+
     const result = await billing.grant(userId, amount, 'grant', { source: 'admin_web' });
     res.redirect(`/admin/users/${userId}?ok=grant&balance=${result.balanceAfter}`);
   });
 
-  router.get('/payments', async (req, res) => {
-    const status = req.query.status === 'all' ? 'all' : 'pending';
-    const pending = await queries.listPendingPayments(100);
-    const completed =
-      status === 'all' ? await queries.listPaymentsByStatus('completed', 30) : [];
+  router.post('/users/:id/deduct', async (req, res) => {
+    const userId = Number(req.params.id);
+    const amount = Number(req.body.amount);
 
-    const renderPaymentRows = (list, withAction = false) =>
-      list.length
-        ? list
-            .map((p) => {
-              const action = withAction
-                ? `<form method="post" action="/admin/payments/${esc(p.payment_code)}/confirm" style="display:inline">
-                 <button type="submit" class="btn btn-sm btn-success">Подтвердить</button>
-               </form>`
-                : `<span class="badge badge-success">завершена</span>`;
-              return `<tr>
-              <td><code>${esc(p.payment_code)}</code></td>
-              <td><a href="/admin/users/${p.user_id}">${esc(userLabel(p))}</a></td>
-              <td>${esc(p.rub_amount)} ₽</td>
-              <td>${formatCredits(p.credits_amount)}</td>
-              <td><span class="badge badge-${p.status === 'pending' ? 'pending' : 'success'}">${esc(p.status)}</span></td>
-              <td>${formatDate(p.created_at)}</td>
-              <td>${action}</td>
-            </tr>`;
-            })
-            .join('')
-        : `<tr><td colspan="7" class="empty">Нет записей</td></tr>`;
-
-    const body = `
-      ${flashMessage(req.query)}
-      <h1 class="page-title">Пополнения</h1>
-      <p class="page-subtitle">Курс: 100 ₽ = ${formatCredits(100 * config.creditsPerRub)} кредитов</p>
-      <div class="toolbar">
-        <a href="/admin/payments" class="btn${status !== 'all' ? '' : ' btn-ghost'}">Ожидающие</a>
-        <a href="/admin/payments?status=all" class="btn${status === 'all' ? '' : ' btn-ghost'}">+ завершённые</a>
-      </div>
-      <div class="card">
-        <div class="card-header">Ожидают подтверждения (${pending.length})</div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr><th>Код</th><th>Пользователь</th><th>₽</th><th>Кредиты</th><th>Статус</th><th>Создана</th><th></th></tr>
-            </thead>
-            <tbody>${renderPaymentRows(pending, true)}</tbody>
-          </table>
-        </div>
-      </div>
-      ${
-        status === 'all'
-          ? `<div class="card">
-        <div class="card-header">Недавно завершённые</div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr><th>Код</th><th>Пользователь</th><th>₽</th><th>Кредиты</th><th>Статус</th><th>Создана</th><th></th></tr>
-            </thead>
-            <tbody>${renderPaymentRows(completed)}</tbody>
-          </table>
-        </div>
-      </div>`
-          : ''
-      }
-    `;
-
-    res.type('html').send(layout('Пополнения', 'payments', body));
-  });
-
-  router.post('/payments/:code/confirm', async (req, res) => {
-    const code = req.params.code;
-    const result = await payments.confirmPayment(code, 'web-admin');
-
-    if (!result.ok) {
-      const errors = {
-        not_found: 'Заявка не найдена',
-        already_completed: 'Уже подтверждена',
-        cancelled: 'Заявка отменена',
-      };
-      res.redirect(`/admin/payments?error=${encodeURIComponent(errors[result.reason] || 'Ошибка')}`);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      res.redirect(`/admin/users/${userId}?error=${encodeURIComponent('Укажите положительное число')}`);
       return;
     }
 
-    res.redirect(`/admin/payments?ok=confirm&code=${encodeURIComponent(code)}`);
+    const user = await queries.getUserById(userId);
+    if (!user) {
+      res.redirect('/admin/users?error=' + encodeURIComponent('Пользователь не найден'));
+      return;
+    }
+
+    try {
+      const result = await billing.adminDeduct(userId, amount);
+      res.redirect(`/admin/users/${userId}?ok=deduct&balance=${result.balanceAfter}`);
+    } catch (err) {
+      if (err instanceof InsufficientCreditsError) {
+        res.redirect(
+          `/admin/users/${userId}?error=${encodeURIComponent(
+            `Недостаточно вопросов: есть ${err.balance}, нужно списать ${err.required}`,
+          )}`,
+        );
+        return;
+      }
+      throw err;
+    }
+  });
+
+  router.post('/users/:id/set-balance', async (req, res) => {
+    const userId = Number(req.params.id);
+    const balance = Number(req.body.balance);
+
+    if (!Number.isFinite(balance) || balance < 0) {
+      res.redirect(`/admin/users/${userId}?error=${encodeURIComponent('Баланс не может быть отрицательным')}`);
+      return;
+    }
+
+    const user = await queries.getUserById(userId);
+    if (!user) {
+      res.redirect('/admin/users?error=' + encodeURIComponent('Пользователь не найден'));
+      return;
+    }
+
+    const result = await billing.setBalance(userId, balance);
+    res.redirect(`/admin/users/${userId}?ok=set&balance=${result.balanceAfter}`);
+  });
+
+  router.post('/users/:id/delete', async (req, res) => {
+    const userId = Number(req.params.id);
+    const user = await queries.getUserById(userId);
+
+    if (!user) {
+      res.redirect('/admin/users?error=' + encodeURIComponent('Пользователь не найден'));
+      return;
+    }
+
+    if (isProtectedAdminUser(user)) {
+      res.redirect(
+        `/admin/users/${userId}?error=${encodeURIComponent('Нельзя удалить пользователя из ADMIN_TELEGRAM_IDS')}`,
+      );
+      return;
+    }
+
+    await queries.deleteUserById(userId);
+    res.redirect('/admin/users?ok=deleted');
+  });
+
+  router.get('/payments', async (req, res) => {
+    const completed = await queries.listPaymentsByStatus('completed', 50);
+    const incomplete = await queries.listIncompletePayments(20);
+
+    const completedRows = completed.length
+      ? completed
+          .map(
+            (p) => `<tr>
+              <td>${formatDate(p.completed_at || p.created_at)}</td>
+              <td><a href="/admin/users/${p.user_id}">${esc(userLabel(p))}</a></td>
+              <td>${esc(p.rub_amount)} ₽</td>
+              <td>${formatCredits(p.credits_amount)}</td>
+              <td><code>${esc(p.payment_code)}</code></td>
+            </tr>`,
+          )
+          .join('')
+      : `<tr><td colspan="5" class="empty">Пока нет успешных оплат</td></tr>`;
+
+    const incompleteBlock = incomplete.length
+      ? `<div class="card">
+        <div class="card-header">Не завершены (${incomplete.length})</div>
+        <p class="muted-text" style="padding:0 1rem">Пользователь открыл оплату, но не завершил её на стороне ЮKassa.</p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Создана</th><th>Пользователь</th><th>₽</th><th>Вопросов</th><th>Код</th></tr>
+            </thead>
+            <tbody>${incomplete
+              .map(
+                (p) => `<tr>
+              <td>${formatDate(p.created_at)}</td>
+              <td><a href="/admin/users/${p.user_id}">${esc(userLabel(p))}</a></td>
+              <td>${esc(p.rub_amount)} ₽</td>
+              <td>${formatCredits(p.credits_amount)}</td>
+              <td><code>${esc(p.payment_code)}</code></td>
+            </tr>`,
+              )
+              .join('')}</tbody>
+          </table>
+        </div>
+      </div>`
+      : '';
+
+    const body = `
+      ${flashMessage(req.query)}
+      <h1 class="page-title">Оплаты</h1>
+      <p class="page-subtitle">Автоначисление через ЮKassa · ${esc(formatPackagesLine().replace(/\n/g, ' · '))}</p>
+      <div class="card">
+        <div class="card-header">Успешные оплаты (${completed.length})</div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Дата</th><th>Пользователь</th><th>₽</th><th>Вопросов</th><th>Код</th></tr>
+            </thead>
+            <tbody>${completedRows}</tbody>
+          </table>
+        </div>
+      </div>
+      ${incompleteBlock}
+    `;
+
+    res.type('html').send(layout('Оплаты', 'payments', body));
   });
 
   router.use((req, res) => {

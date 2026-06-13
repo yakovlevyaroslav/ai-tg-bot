@@ -46,12 +46,10 @@ export function startSiteServer({ onPaymentSuccess } = {}) {
     res.type('html').send(renderLandingPage());
   });
 
-  if (config.paymentProvider === 'yookassa') {
-    app.post(
-      config.yookassaWebhookPath,
-      createYookassaWebhookHandler({ notifyUser: onPaymentSuccess }),
-    );
-  }
+  app.post(
+    config.yookassaWebhookPath,
+    createYookassaWebhookHandler({ notifyUser: onPaymentSuccess }),
+  );
 
   if (config.adminWebEnabled) {
     app.use('/admin', basicAuth, createAdminRouter());
@@ -63,12 +61,10 @@ export function startSiteServer({ onPaymentSuccess } = {}) {
     if (config.adminWebEnabled) {
       console.log(`Admin panel: http://${host}:${config.adminWebPort}/admin`);
     }
-    if (config.paymentProvider === 'yookassa') {
-      const webhookUrl = config.publicSiteUrl
-        ? `${config.publicSiteUrl}${config.yookassaWebhookPath}`
-        : `http://${host}:${config.adminWebPort}${config.yookassaWebhookPath}`;
-      console.log(`YooKassa webhook: POST ${webhookUrl}`);
-    }
+    const webhookUrl = config.publicSiteUrl
+      ? `${config.publicSiteUrl}${config.yookassaWebhookPath}`
+      : `http://${host}:${config.adminWebPort}${config.yookassaWebhookPath}`;
+    console.log(`YooKassa webhook: POST ${webhookUrl}`);
   });
 
   server.on('error', (err) => {

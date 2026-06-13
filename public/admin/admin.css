@@ -264,6 +264,62 @@ input[type='text'] {
   background: var(--success);
 }
 
+.btn-success:hover {
+  background: #16a34a;
+}
+
+.btn-danger {
+  background: var(--danger);
+}
+
+.btn-danger:hover {
+  background: #dc2626;
+}
+
+.balance-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+}
+
+.balance-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.balance-form-label {
+  min-width: 7rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.balance-form input[type='number'] {
+  width: 120px;
+  padding: 0.4rem 0.55rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text);
+}
+
+.card-danger {
+  border-color: rgba(239, 68, 68, 0.35);
+}
+
+.card-danger .card-header {
+  color: #fca5a5;
+}
+
+.muted-text {
+  margin: 0 0 0.75rem;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
 .pagination {
   display: flex;
   gap: 0.5rem;

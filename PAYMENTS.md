@@ -6,32 +6,24 @@
 
 | Переменная | Что делает | Пример |
 |------------|------------|--------|
-| `TOPUP_PACKAGES_RUB` | Суммы кнопок «Пополнить» в боте | `100,300,500,1000` |
-| `CREDITS_PER_RUB` | Сколько кредитов за 1 ₽ | `10` → 100 ₽ = 1000 кредитов |
-| `CREDITS_PER_MESSAGE` | Списание за один ответ AI | `10` |
-| `WELCOME_BONUS_CREDITS` | Бонус новому пользователю | `300` |
+| `TOPUP_PACKAGES` | Публичные тарифы: рубли:кол-во вопросов | `200:5,300:10,500:20` |
+| `ADMIN_TOPUP_PACKAGE` | Тестовый тариф только для админов (`off` — выкл.) | `1:10` |
+| `REQUESTS_PER_MESSAGE` | Списание за один ответ AI | `1` |
+| `WELCOME_BONUS_REQUESTS` | Бесплатные вопросы новому пользователю | `0` |
 
 Логика расчёта — в `src/pricing.js` и `src/config.js`.
 
-Чтобы добавить пакет 200 ₽: измените `TOPUP_PACKAGES_RUB=100,200,300,500,1000` и перезапустите бота (`pm2 restart ai-tg-bot`).
+Чтобы добавить пакет 400 ₽ на 15 вопросов: `TOPUP_PACKAGES=200:5,300:10,400:15,500:20` и перезапустите бота (`pm2 restart ai-tg-bot ai-tg-site`).
 
 В ЮKassa вы настраиваете только **подключение магазина** (shop_id, secret key, webhook). Суммы платежей бот передаёт в API автоматически из выбранного пакета.
 
 ---
 
-## Режимы оплаты
+## Как работает оплата
 
-### `PAYMENT_PROVIDER=manual` (по умолчанию)
-
-1. Пользователь выбирает пакет
-2. Бот показывает реквизиты (`PAYMENT_DETAILS`) и код `PAY-XXXXXX`
-3. Админ подтверждает: `/confirm PAY-XXXXXX` или кнопка в веб-админке
-
-### `PAYMENT_PROVIDER=yookassa`
-
-1. Пользователь выбирает пакет
+1. Пользователь выбирает пакет в боте
 2. Бот создаёт платёж в [API ЮKassa](https://yookassa.ru/developers) и показывает кнопку «Оплатить»
-3. После оплаты ЮKassa шлёт webhook → кредиты начисляются автоматически
+3. После оплаты ЮKassa шлёт webhook → вопросы начисляются автоматически
 
 ---
 
@@ -46,8 +38,6 @@
 ### 2. Переменные в `.env`
 
 ```env
-PAYMENT_PROVIDER=yookassa
-
 YOOKASSA_SHOP_ID=123456
 YOOKASSA_SECRET_KEY=live_xxxxxxxx
 YOOKASSA_RETURN_URL=https://t.me/your_bot_username
@@ -102,12 +92,10 @@ pm2 restart ai-tg-bot
 
 **Тестовый платёж:**
 
-1. `PAYMENT_PROVIDER=yookassa` + тестовые ключи
+1. Тестовые ключи ЮKassa в `.env`
 2. В боте: «Пополнить» → выбрать пакет → «Оплатить»
 3. Оплатить тестовой картой `5555 5555 5555 4444`
 4. В логах webhook, пользователю приходит «Оплата прошла успешно»
-
-**Ручной режим** — оставьте `PAYMENT_PROVIDER=manual` или не задавайте переменную.
 
 ---
 
@@ -115,9 +103,9 @@ pm2 restart ai-tg-bot
 
 | Файл | Назначение |
 |------|------------|
-| `src/pricing.js` | Расчёт кредитов из рублей |
-| `src/topup.js` | UI пополнения (manual / yookassa) |
-| `src/payments.js` | Заявки, подтверждение, начисление |
+| `src/shared/pricing.js` | Тарифы и пакеты |
+| `src/bot/topup.js` | UI пополнения (ЮKassa) |
+| `src/shared/payments.js` | Заявки и начисление после оплаты |
 | `src/yookassa/client.js` | HTTP-клиент API ЮKassa |
 | `src/yookassa/webhook.js` | Обработчик `payment.succeeded` |
 | `src/yookassa/service.js` | Создание платежа при выборе пакета |

@@ -18,7 +18,7 @@ async function ensureBalanceRow(client, userId) {
 }
 
 export function estimateMessageCost() {
-  return config.creditsPerMessage;
+  return config.requestsPerMessage;
 }
 
 export async function getBalance(userId) {
@@ -170,8 +170,62 @@ export async function grant(userId, amount, type = 'grant', meta = {}, idempoten
   });
 }
 
+/** Списание администратором (через charge). */
+export async function adminDeduct(userId, amount, meta = {}) {
+  return charge(userId, amount, { ...meta, source: 'admin_web', reason: 'admin_deduct' });
+}
+
+/** Установить точный баланс (админка). */
+export async function setBalance(userId, newBalance, meta = {}) {
+  if (!Number.isFinite(newBalance) || newBalance < 0) {
+    throw new Error('Balance must be a non-negative number');
+  }
+
+  return withTransaction(async (client) => {
+    await ensureBalanceRow(client, userId);
+
+    const { rows } = await client.query(
+      `SELECT credits FROM balances WHERE user_id = $1 FOR UPDATE`,
+      [userId],
+    );
+    const current = Number(rows[0].credits);
+    const target = Math.floor(newBalance);
+
+    if (target === current) {
+      return { balanceAfter: current, changed: false, diff: 0 };
+    }
+
+    const diff = target - current;
+    const txType = diff > 0 ? 'grant' : 'spend';
+    const txAmount = diff > 0 ? diff : -Math.abs(diff);
+
+    await client.query(
+      `INSERT INTO token_transactions (user_id, amount, type, meta)
+       VALUES ($1, $2, $3, $4)`,
+      [
+        userId,
+        txAmount,
+        txType,
+        JSON.stringify({
+          ...meta,
+          source: 'admin_web',
+          reason: 'admin_set_balance',
+          previousBalance: current,
+        }),
+      ],
+    );
+
+    await client.query(
+      `UPDATE balances SET credits = $1, updated_at = NOW() WHERE user_id = $2`,
+      [target, userId],
+    );
+
+    return { balanceAfter: target, changed: true, diff };
+  });
+}
+
 export async function grantWelcomeBonus(userId) {
-  if (config.welcomeBonusCredits <= 0) {
+  if (config.welcomeBonusRequests <= 0) {
     return { granted: false, amount: 0 };
   }
 
@@ -209,7 +263,7 @@ export async function grantWelcomeBonus(userId) {
        VALUES ($1, $2, 'bonus', $3, $4)`,
       [
         userId,
-        config.welcomeBonusCredits,
+        config.welcomeBonusRequests,
         idempotencyKey,
         JSON.stringify({ reason: 'welcome' }),
       ],
@@ -220,12 +274,12 @@ export async function grantWelcomeBonus(userId) {
        SET credits = credits + $1, updated_at = NOW()
        WHERE user_id = $2
        RETURNING credits`,
-      [config.welcomeBonusCredits, userId],
+      [config.welcomeBonusRequests, userId],
     );
 
     return {
       granted: true,
-      amount: config.welcomeBonusCredits,
+      amount: config.welcomeBonusRequests,
       balanceAfter: Number(rows[0].credits),
     };
   });

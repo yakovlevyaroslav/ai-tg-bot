@@ -1,9 +1,11 @@
+import { formatTokens } from './requests-format.js';
+
 export function getUserErrorMessage(err) {
   if (err?.code === 'INSUFFICIENT_CREDITS') {
     return (
-      `Недостаточно кредитов.\n` +
-      `Баланс: ${err.balance}, нужно: ${err.required}.\n\n` +
-      `Нажмите ${'💰 Баланс'} или обратитесь к администратору для пополнения.`
+      `Недостаточно токенов.\n` +
+      `Осталось: ${formatTokens(err.balance)}, нужно: ${formatTokens(err.required)}.\n\n` +
+      '1 токен = 1 вопрос. Пополните баланс, нажмите «Тарифы» ниже.'
     );
   }
 

@@ -1,17 +1,18 @@
 import { config } from '../config.js';
+import { formatRequests } from '../requests-format.js';
 import * as payments from '../payments.js';
 import { createPayment, getPayment } from './client.js';
 
 export function isYookassaEnabled() {
-  return config.paymentProvider === 'yookassa';
+  return true;
 }
 
-export async function startTopupPayment(userId, rubAmount) {
-  const pending = await payments.createTopupRequest(userId, rubAmount, 'yookassa');
+export async function startTopupPayment(userId, rubAmount, requests = null) {
+  const pending = await payments.createTopupRequest(userId, rubAmount, requests);
 
   const payment = await createPayment({
     amountRub: rubAmount,
-    description: `Пополнение ${rubAmount} ₽ (${pending.credits_amount} кредитов)`,
+    description: `Пополнение ${rubAmount} ₽ (${formatRequests(pending.credits_amount)})`,
     metadata: {
       payment_code: pending.payment_code,
       user_id: String(userId),

@@ -46,7 +46,6 @@ ADMIN_WEB_USER=adm1n
 ADMIN_WEB_PASSWORD=надёжный_пароль
 
 # ЮKassa
-PAYMENT_PROVIDER=yookassa
 YOOKASSA_SHOP_ID=...
 YOOKASSA_SECRET_KEY=...
 YOOKASSA_RETURN_URL=https://t.me/ObormotMusoroglot_bot
