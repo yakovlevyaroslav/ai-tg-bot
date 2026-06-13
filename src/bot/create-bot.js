@@ -4,8 +4,9 @@ import * as db from '../shared/db.js';
 import {
   buildAnswerIntroPrefix,
   buildOnboardingSystemContext,
-  loadQuestionsSystemPrompt,
 } from '../shared/onboarding-context.js';
+import { loadQuestionsSystemPrompt } from '../shared/answer-style.js';
+import { replyFormatted, splitFormattedMessage } from '../shared/telegram-format.js';
 import * as billing from '../shared/billing.js';
 import { complete } from './ai/index.js';
 import { getUserErrorMessage } from '../shared/errors.js';
@@ -31,6 +32,7 @@ import {
   handleOnboardingGender,
   handleOnboardingPlaceChoice,
   handleOnboardingConfirm,
+  handleOnboardingAnswerStyle,
   skipOnboardingForAdmin,
   isOnboardingBlocking,
 } from './onboarding.js';
@@ -59,30 +61,8 @@ import {
   beginNewTopic,
 } from './answer-followup.js';
 
-const TELEGRAM_MAX_LENGTH = 4096;
-
 function splitMessage(text) {
-  if (text.length <= TELEGRAM_MAX_LENGTH) {
-    return [text];
-  }
-
-  const chunks = [];
-  let rest = text;
-
-  while (rest.length > TELEGRAM_MAX_LENGTH) {
-    let cut = rest.lastIndexOf('\n', TELEGRAM_MAX_LENGTH);
-    if (cut < TELEGRAM_MAX_LENGTH / 2) {
-      cut = TELEGRAM_MAX_LENGTH;
-    }
-    chunks.push(rest.slice(0, cut));
-    rest = rest.slice(cut).trimStart();
-  }
-
-  if (rest) {
-    chunks.push(rest);
-  }
-
-  return chunks;
+  return splitFormattedMessage(text);
 }
 
 function formatBalanceLine(balance, charged = null) {
@@ -142,7 +122,7 @@ async function buildMessages(userId) {
   const onboardingContext = buildOnboardingSystemContext(onboardingData);
   const questionsPrompt =
     profile?.onboarding_completed && onboardingData?.personality_code
-      ? loadQuestionsSystemPrompt()
+      ? loadQuestionsSystemPrompt(onboardingData?.answer_style)
       : '';
   const basePrompt = questionsPrompt || config.systemPrompt;
   const systemPrompt = onboardingContext
@@ -206,8 +186,9 @@ async function handleChatMessage(ctx, userId, text) {
 
     for (const [index, chunk] of chunks.entries()) {
       const isLast = index === chunks.length - 1;
-      const text = isLast ? chunk + footer : chunk;
-      await ctx.reply(text, isLast ? answerTopicChoiceInlineKeyboard() : undefined);
+      const replyText = isLast ? chunk + footer : chunk;
+      const keyboard = isLast ? answerTopicChoiceInlineKeyboard() : undefined;
+      await replyFormatted(ctx, replyText, keyboard);
     }
   } catch (err) {
     console.error('Chat error:', err?.message ?? err);
@@ -388,6 +369,11 @@ export function createBot() {
   bot.action(/^onboard:gender:(male|female)$/, async (ctx) => {
     const { userId } = await registerUser(ctx);
     await handleOnboardingGender(ctx, userId, ctx.match[1]);
+  });
+
+  bot.action(/^onboard:style:(simple|professional)$/, async (ctx) => {
+    const { userId } = await registerUser(ctx);
+    await handleOnboardingAnswerStyle(ctx, userId, ctx.match[1]);
   });
 
   bot.action(/^onboard:place:(\d+)$/, async (ctx) => {

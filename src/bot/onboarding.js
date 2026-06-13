@@ -15,8 +15,18 @@ import {
 } from '../shared/onboarding-context.js';
 import { getUserErrorMessage } from '../shared/errors.js';
 import { buildWelcomeText, WELCOME_MESSAGE_PARSE_MODE } from '../shared/welcome-message.js';
+import { replyFormatted } from '../shared/telegram-format.js';
+import {
+  ANSWER_STYLES,
+  getAnswerStyleLabel,
+} from '../shared/answer-style.js';
 
 const MESSAGES = {
+  answerStyle:
+    'В каком стиле вам удобнее получать ответы?\n\n' +
+    '• Простой — коротко и простыми словами, сразу к сути\n' +
+    '• Профессиональный — развёрнуто, с разбором по каждому направлению кода личности',
+  answerStyleReminder: 'Выберите стиль ответов кнопкой ниже 👇',
   askName:
     'Мне нужно немного информации, чтобы определить твой код личности 🔢\n\n' +
     'Для начала скажи своё имя:',
@@ -88,6 +98,17 @@ function confirmKeyboard() {
     [Markup.button.callback('Да (начинаем расчёт)', 'onboard:confirm:yes')],
     [Markup.button.callback('Нет (заполнить сначала)', 'onboard:confirm:no')],
   ]);
+}
+
+function answerStyleKeyboard() {
+  return Markup.inlineKeyboard([
+    [Markup.button.callback('🙂 Простые ответы', 'onboard:style:simple')],
+    [Markup.button.callback('📚 Профессиональные ответы', 'onboard:style:professional')],
+  ]);
+}
+
+async function askAnswerStyle(ctx) {
+  await ctx.reply(MESSAGES.answerStyle, answerStyleKeyboard());
 }
 
 function buildSummaryText(data) {
@@ -206,7 +227,7 @@ async function runCalculationLoading(ctx, userId) {
     const chunks = splitPersonalityCodeReply(result.content);
 
     for (const chunk of chunks) {
-      await ctx.reply(chunk);
+      await replyFormatted(ctx, chunk);
     }
 
     await db.setOnboardingStep(userId, 'completed', {
@@ -260,8 +281,32 @@ export async function startOnboarding(ctx, userId) {
   await dismissLegacyReplyKeyboard(ctx);
   await ctx.reply(buildWelcomeText(ctx.from?.id), { parse_mode: WELCOME_MESSAGE_PARSE_MODE });
   await delay();
+  await askAnswerStyle(ctx);
+  await db.setOnboardingStep(userId, 'await_answer_style');
+}
+
+export async function handleOnboardingAnswerStyle(ctx, userId, style) {
+  const profile = await db.getUserProfile(userId);
+  if (!profile || profile.onboarding_step !== 'await_answer_style') {
+    await ctx.answerCbQuery('Сначала выберите стиль ответов');
+    return;
+  }
+
+  const normalizedStyle =
+    style === ANSWER_STYLES.simple ? ANSWER_STYLES.simple : ANSWER_STYLES.professional;
+  const label = getAnswerStyleLabel(normalizedStyle);
+
+  await ctx.answerCbQuery(`Выбрано: ${label}`);
+  await ctx.editMessageReplyMarkup(undefined).catch(() => {});
+
+  await db.setOnboardingStep(userId, 'await_name', {
+    answer_style: normalizedStyle,
+    answer_style_label: label,
+  });
+
+  await ctx.reply(`Стиль ответов: ${label}`);
+  await delay();
   await ctx.reply(MESSAGES.askName);
-  await db.setOnboardingStep(userId, 'await_name');
 }
 
 /** Пропуск анкеты для админа — сразу к финальному этапу */
@@ -271,6 +316,8 @@ export async function skipOnboardingForAdmin(ctx, userId) {
 
   await db.setOnboardingStep(userId, 'completed', {
     ...randomData,
+    answer_style: ANSWER_STYLES.professional,
+    answer_style_label: getAnswerStyleLabel(ANSWER_STYLES.professional),
     personality_code_result: stubResult,
     skipped_by_admin: true,
   });
@@ -295,6 +342,11 @@ export async function handleOnboardingText(ctx, userId, text, profile) {
 
   if (step === 'calculating') {
     await ctx.reply(LOADING_PHRASES[LOADING_PHRASES.length - 1]);
+    return true;
+  }
+
+  if (step === 'await_answer_style') {
+    await ctx.reply(MESSAGES.answerStyleReminder, answerStyleKeyboard());
     return true;
   }
 

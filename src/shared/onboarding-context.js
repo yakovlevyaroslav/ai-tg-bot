@@ -1,29 +1,5 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { computePersonalityCodes } from './personality-code-math.js';
-
-const promptsDir = join(dirname(fileURLToPath(import.meta.url)), '../../prompts');
-let cachedQuestionsPrompt = null;
-
-function loadQuestionsPromptTemplate() {
-  if (cachedQuestionsPrompt) {
-    return cachedQuestionsPrompt;
-  }
-
-  const path = resolve(promptsDir, 'questions.txt');
-  if (!existsSync(path)) {
-    return '';
-  }
-
-  cachedQuestionsPrompt = readFileSync(path, 'utf8').trim();
-  return cachedQuestionsPrompt;
-}
-
-/** Системная инструкция для ответов на вопросы после базового разбора */
-export function loadQuestionsSystemPrompt() {
-  return loadQuestionsPromptTemplate();
-}
+import { getAnswerStyleLabel } from './answer-style.js';
 
 const RANDOM_NAMES = [
   'Анна',
@@ -96,7 +72,7 @@ export function buildAnswerIntroPrefix(data) {
     return '';
   }
 
-  return `Основываясь на твоём коде личности № ${data.personality_code}:\n\n`;
+  return `✨ Основываясь на твоём коде личности № <b>${data.personality_code}</b>:\n\n`;
 }
 
 /** Текстовый блок с данными анкеты для system prompt */
@@ -128,6 +104,10 @@ export function buildOnboardingSystemContext(data) {
     '- Направления кода: астрология, Human Design, нумерология, Сюцай, ведическая астрология (Джойтиш)',
   ];
 
+  if (data.answer_style) {
+    lines.push(`- Стиль ответов: ${getAnswerStyleLabel(data.answer_style)}`);
+  }
+
   if (codes.astrologyCode) {
     lines.push(`- Код астрологии: ${codes.astrologyCode}`);
   }
@@ -156,6 +136,7 @@ export function buildOnboardingSystemContext(data) {
     '',
     'Все ответы на вопросы пользователя строй исключительно на базовом разборе и данных анкеты выше.',
     'Если вопрос касается предназначения, отношений, работы или роста — выводи логику из портрета и кодов, а не из общих шаблонов.',
+    'Пиши тепло и живо, не сухо: HTML-оформление (<b>акценты</b>), короткие абзацы, 3–6 эмодзи на ответ.',
     'Обращайся на «ты».',
   );
 
