@@ -1,4 +1,29 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { computePersonalityCodes } from './personality-code-math.js';
+
+const promptsDir = join(dirname(fileURLToPath(import.meta.url)), '../../prompts');
+let cachedQuestionsPrompt = null;
+
+function loadQuestionsPromptTemplate() {
+  if (cachedQuestionsPrompt) {
+    return cachedQuestionsPrompt;
+  }
+
+  const path = resolve(promptsDir, 'questions.txt');
+  if (!existsSync(path)) {
+    return '';
+  }
+
+  cachedQuestionsPrompt = readFileSync(path, 'utf8').trim();
+  return cachedQuestionsPrompt;
+}
+
+/** Системная инструкция для ответов на вопросы после базового разбора */
+export function loadQuestionsSystemPrompt() {
+  return loadQuestionsPromptTemplate();
+}
 
 const RANDOM_NAMES = [
   'Анна',
@@ -58,11 +83,20 @@ export function generateRandomOnboardingData() {
   };
 }
 
-function truncateText(text, maxLength = 1800) {
+function truncateText(text, maxLength = 3500) {
   if (!text || text.length <= maxLength) {
     return text || '';
   }
   return `${text.slice(0, maxLength).trimEnd()}…`;
+}
+
+/** Префикс, который бот показывает пользователю перед ответом нейросети */
+export function buildAnswerIntroPrefix(data) {
+  if (!data?.personality_code) {
+    return '';
+  }
+
+  return `Основываясь на твоём коде личности № ${data.personality_code}:\n\n`;
 }
 
 /** Текстовый блок с данными анкеты для system prompt */
@@ -101,12 +135,18 @@ export function buildOnboardingSystemContext(data) {
   }
 
   if (data.personality_code_result) {
-    lines.push('', 'РАНЕЕ ВЫДАННЫЙ ПОРТРЕТ КОДА ЛИЧНОСТИ:', truncateText(data.personality_code_result));
+    lines.push(
+      '',
+      'БАЗОВЫЙ РАЗБОР КОДА ЛИЧНОСТИ (обязательная основа для всех ответов на вопросы):',
+      truncateText(data.personality_code_result),
+    );
   }
 
   lines.push(
     '',
-    'Отвечай персонально этому человеку, опираясь на его анкету и код личности. Обращайся на «ты».',
+    'Все ответы на вопросы пользователя строй исключительно на базовом разборе и данных анкеты выше.',
+    'Если вопрос касается предназначения, отношений, работы или роста — выводи логику из портрета и кодов, а не из общих шаблонов.',
+    'Обращайся на «ты».',
   );
 
   return lines.join('\n');

@@ -4,10 +4,11 @@ import {
   buildFinalQuestionPrompt,
   questionConfirmInlineKeyboard,
   QUESTION_ADDON_TEXT,
+  QUESTION_CHANGE_TEXT,
   CUSTOM_QUESTION_TEXT,
   isQuestionFlowActive,
 } from './question-flow.js';
-import { customQuestionInlineKeyboard } from './keyboards.js';
+import { customQuestionInlineKeyboard, questionsMenuInlineKeyboard } from './keyboards.js';
 
 export { isQuestionFlowActive };
 
@@ -45,6 +46,18 @@ export async function sendQuestionConfirmPrompt(ctx, userId) {
     buildQuestionConfirmMessage(pending),
     questionConfirmInlineKeyboard(),
   );
+}
+
+export async function beginQuestionChange(ctx, userId) {
+  const profile = await db.getUserProfile(userId);
+  if (profile?.onboarding_step !== 'question_confirm') {
+    await ctx.answerCbQuery?.('Сначала выберите вопрос');
+    return false;
+  }
+
+  await db.setOnboardingStep(userId, 'completed', { pending_question: null });
+  await ctx.reply(QUESTION_CHANGE_TEXT, questionsMenuInlineKeyboard());
+  return true;
 }
 
 export async function beginQuestionAddon(ctx, userId) {
@@ -101,7 +114,7 @@ export async function finalizePendingQuestion(userId) {
 
 export async function handleQuestionConfirmReminder(ctx) {
   await ctx.reply(
-    'Хотите добавить ещё информации к вопросу или уже готовы получить ответ?',
+    'Можете добавить уточнение, поменять вопрос или получить ответ — выберите кнопку ниже.',
     questionConfirmInlineKeyboard(),
   );
 }

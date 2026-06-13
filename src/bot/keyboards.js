@@ -12,6 +12,19 @@ export async function dismissLegacyReplyKeyboard(ctx) {
   }
 }
 
+export function postActionsInlineKeyboard() {
+  return Markup.inlineKeyboard([
+    [
+      Markup.button.callback('✍️ Свой вопрос', 'post:questions:custom'),
+      Markup.button.callback('🔥 Популярные вопросы', 'post:questions:popular'),
+    ],
+    [
+      Markup.button.callback('📋 Тарифы', 'post:tariffs'),
+      Markup.button.callback('🗂️ Меню', 'post:followup:commands'),
+    ],
+  ]);
+}
+
 export function balanceTariffsInlineKeyboard() {
   return Markup.inlineKeyboard([
     [Markup.button.callback('📋 Тарифы', 'post:tariffs')],

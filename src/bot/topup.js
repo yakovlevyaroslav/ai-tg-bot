@@ -13,8 +13,9 @@ import {
   checkYookassaPayment,
 } from '../shared/yookassa/service.js';
 import { scheduleYookassaPaymentPoll } from '../shared/yookassa/poll.js';
-import { notifyPaymentSuccess } from '../site/notify.js';
+import { notifyPaymentSuccess, buildPaymentSuccessText } from '../site/notify.js';
 import { config } from '../shared/config.js';
+import { postActionsInlineKeyboard } from './keyboards.js';
 
 function packageButtonLabel(pkg, publicIndex = 0) {
   const { emoji, title } = getPackagePresentation(pkg, publicIndex);
@@ -147,11 +148,7 @@ export async function handleCheckPaymentCallback(ctx, userId, paymentCode) {
 
     if (result.ok && !result.alreadyGranted) {
       await ctx.answerCbQuery('Оплата получена!');
-      await ctx.reply(
-        `✅ Баланс пополнен!\n\n` +
-          `+${formatTokens(result.pending.credits_amount)}\n` +
-          `Осталось: ${formatTokens(result.balanceAfter)}`,
-      );
+      await ctx.reply(buildPaymentSuccessText(result), postActionsInlineKeyboard());
       return;
     }
 

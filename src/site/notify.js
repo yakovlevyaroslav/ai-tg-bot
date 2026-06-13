@@ -1,5 +1,14 @@
 import { config } from '../shared/config.js';
+import { postActionsInlineKeyboard } from '../bot/keyboards.js';
 import { formatTokens } from '../shared/requests-format.js';
+
+export function buildPaymentSuccessText(result) {
+  return (
+    `✅ Оплата прошла успешно!\n\n` +
+    `+${formatTokens(result.pending.credits_amount)}\n` +
+    `Осталось: ${formatTokens(result.balanceAfter)}`
+  );
+}
 
 export async function notifyPaymentSuccess(result) {
   const chatId = result.pending?.telegram_id;
@@ -7,17 +16,16 @@ export async function notifyPaymentSuccess(result) {
     return;
   }
 
-  const text =
-    `✅ Оплата прошла успешно!\n\n` +
-    `+${formatTokens(result.pending.credits_amount)}\n` +
-    `Осталось: ${formatTokens(result.balanceAfter)}`;
-
   const response = await fetch(
     `https://api.telegram.org/bot${config.telegramToken}/sendMessage`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text }),
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: buildPaymentSuccessText(result),
+        reply_markup: postActionsInlineKeyboard().reply_markup,
+      }),
     },
   );
 

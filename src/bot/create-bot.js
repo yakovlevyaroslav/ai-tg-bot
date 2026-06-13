@@ -1,7 +1,11 @@
 import { Telegraf } from 'telegraf';
 import { config } from '../shared/config.js';
 import * as db from '../shared/db.js';
-import { buildOnboardingSystemContext } from '../shared/onboarding-context.js';
+import {
+  buildAnswerIntroPrefix,
+  buildOnboardingSystemContext,
+  loadQuestionsSystemPrompt,
+} from '../shared/onboarding-context.js';
 import * as billing from '../shared/billing.js';
 import { complete } from './ai/index.js';
 import { getUserErrorMessage } from '../shared/errors.js';
@@ -39,6 +43,7 @@ import {
 import {
   startPendingQuestion,
   beginQuestionAddon,
+  beginQuestionChange,
   handleQuestionAddonText,
   finalizePendingQuestion,
   handleQuestionConfirmReminder,
@@ -131,10 +136,16 @@ async function sendRestart(ctx) {
 
 async function buildMessages(userId) {
   const profile = await db.getUserProfile(userId);
-  const onboardingContext = buildOnboardingSystemContext(profile?.onboarding_data);
+  const onboardingData = profile?.onboarding_data;
+  const onboardingContext = buildOnboardingSystemContext(onboardingData);
+  const questionsPrompt =
+    profile?.onboarding_completed && onboardingData?.personality_code
+      ? loadQuestionsSystemPrompt()
+      : '';
+  const basePrompt = questionsPrompt || config.systemPrompt;
   const systemPrompt = onboardingContext
-    ? `${config.systemPrompt}\n\n${onboardingContext}`
-    : config.systemPrompt;
+    ? `${basePrompt}\n\n${onboardingContext}`
+    : basePrompt;
 
   const history = await db.getHistory(userId, config.historyLimit);
   return [
@@ -186,8 +197,10 @@ async function handleChatMessage(ctx, userId, text) {
       model: result.model,
     });
 
+    const profile = await db.getUserProfile(userId);
+    const introPrefix = buildAnswerIntroPrefix(profile?.onboarding_data);
     const footer = formatBalanceLine(chargeResult.balanceAfter, cost);
-    const chunks = splitMessage(result.content);
+    const chunks = splitMessage(introPrefix + result.content);
 
     for (const [index, chunk] of chunks.entries()) {
       const isLast = index === chunks.length - 1;
@@ -408,6 +421,12 @@ export function createBot() {
     const { userId } = await registerUser(ctx);
     await ctx.answerCbQuery();
     await beginQuestionAddon(ctx, userId);
+  });
+
+  bot.action('post:question:change', async (ctx) => {
+    const { userId } = await registerUser(ctx);
+    await ctx.answerCbQuery();
+    await beginQuestionChange(ctx, userId);
   });
 
   bot.action('post:question:answer', async (ctx) => {

@@ -1,6 +1,7 @@
 import { Markup } from 'telegraf';
 import { config } from '../shared/config.js';
 import { getCommandsForUser } from './bot-commands.js';
+import { postActionsInlineKeyboard } from './keyboards.js';
 
 const INLINE_BUTTON_MAX = 58;
 
@@ -27,16 +28,7 @@ function truncateInlineButton(label) {
 }
 
 export function answerFollowupInlineKeyboard() {
-  return Markup.inlineKeyboard([
-    [
-      Markup.button.callback('✍️ Свой вопрос', 'post:questions:custom'),
-      Markup.button.callback('🔥 Популярные вопросы', 'post:questions:popular'),
-    ],
-    [
-      Markup.button.callback('📋 Тарифы', 'post:tariffs'),
-      Markup.button.callback('🗂️ Меню', 'post:followup:commands'),
-    ],
-  ]);
+  return postActionsInlineKeyboard();
 }
 
 export function allCommandsInlineKeyboard(telegramId) {

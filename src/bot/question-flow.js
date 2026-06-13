@@ -21,9 +21,13 @@ export const CUSTOM_QUESTION_TEXT =
   '✍️ Свой вопрос\n\n' +
   'Напишите ваш вопрос одним сообщением — учту код личности и помогу разобраться.';
 
+export const QUESTION_CHANGE_TEXT =
+  'Выберите другой вопрос из списка или напишите свой:';
+
 export function questionConfirmInlineKeyboard() {
   return Markup.inlineKeyboard([
     [Markup.button.callback('➕ Добавить информацию', 'post:question:add')],
+    [Markup.button.callback('✏️ Поменять вопрос', 'post:question:change')],
     [Markup.button.callback('✅ Получить ответ', 'post:question:answer')],
   ]);
 }
