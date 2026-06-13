@@ -36,7 +36,7 @@ export { computePersonalityCodes };
 
 export function buildPersonalityCodeMessages(data) {
   const codes = computePersonalityCodes(data);
-  const styleBlock = loadCodeStylePrompt(data?.answer_style);
+  const styleBlock = loadCodeStylePrompt();
   const systemPrompt = fillTemplate(loadCodePromptTemplate(), {
     name: data.name,
     gender_label: data.gender_label,

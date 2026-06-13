@@ -5,16 +5,6 @@ import { loadFormattingInstructions } from './telegram-format.js';
 
 const promptsDir = join(dirname(fileURLToPath(import.meta.url)), '../../prompts');
 
-export const ANSWER_STYLES = {
-  simple: 'simple',
-  professional: 'professional',
-};
-
-export const ANSWER_STYLE_LABELS = {
-  [ANSWER_STYLES.simple]: 'Простой',
-  [ANSWER_STYLES.professional]: 'Профессиональный',
-};
-
 const cache = new Map();
 
 function loadPromptFile(filename) {
@@ -33,33 +23,18 @@ function loadPromptFile(filename) {
   return content;
 }
 
-export function normalizeAnswerStyle(value) {
-  return value === ANSWER_STYLES.simple
-    ? ANSWER_STYLES.simple
-    : ANSWER_STYLES.professional;
-}
-
-export function getAnswerStyleLabel(style) {
-  return ANSWER_STYLE_LABELS[normalizeAnswerStyle(style)];
-}
-
-function loadStyleBlock(style, kind) {
-  const normalized = normalizeAnswerStyle(style);
-  return loadPromptFile(`${kind}-style-${normalized}.txt`);
-}
-
 /** Системная инструкция для ответов на вопросы */
-export function loadQuestionsSystemPrompt(style = ANSWER_STYLES.professional) {
+export function loadQuestionsSystemPrompt() {
   const base = loadPromptFile('questions.txt');
   const formatting = loadFormattingInstructions();
-  const styleBlock = loadStyleBlock(style, 'style');
+  const styleBlock = loadPromptFile('style.txt');
 
   return [base, formatting, styleBlock].filter(Boolean).join('\n\n');
 }
 
 /** Дополнение к промпту базового разбора */
-export function loadCodeStylePrompt(style = ANSWER_STYLES.professional) {
-  const styleBlock = loadStyleBlock(style, 'code');
+export function loadCodeStylePrompt() {
+  const styleBlock = loadPromptFile('code-style.txt');
   const formatting = loadFormattingInstructions();
 
   return [styleBlock, formatting].filter(Boolean).join('\n\n');

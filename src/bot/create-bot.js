@@ -31,7 +31,6 @@ import {
   handleOnboardingText,
   handleOnboardingGender,
   handleOnboardingConfirm,
-  handleOnboardingAnswerStyle,
   skipOnboardingForAdmin,
   isOnboardingBlocking,
 } from './onboarding.js';
@@ -119,7 +118,7 @@ async function buildMessages(userId) {
   const onboardingContext = buildOnboardingSystemContext(onboardingData);
   const questionsPrompt =
     profile?.onboarding_completed && onboardingData?.personality_code
-      ? loadQuestionsSystemPrompt(onboardingData?.answer_style)
+      ? loadQuestionsSystemPrompt()
       : '';
   const basePrompt = questionsPrompt || config.systemPrompt;
   const systemPrompt = onboardingContext
@@ -363,11 +362,6 @@ export function createBot() {
   bot.action(/^onboard:gender:(male|female)$/, async (ctx) => {
     const { userId } = await registerUser(ctx);
     await handleOnboardingGender(ctx, userId, ctx.match[1]);
-  });
-
-  bot.action(/^onboard:style:(simple|professional)$/, async (ctx) => {
-    const { userId } = await registerUser(ctx);
-    await handleOnboardingAnswerStyle(ctx, userId, ctx.match[1]);
   });
 
   bot.action(/^onboard:confirm:(yes|no)$/, async (ctx) => {

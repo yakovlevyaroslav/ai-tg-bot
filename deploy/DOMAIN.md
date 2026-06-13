@@ -7,6 +7,8 @@
 | URL | Назначение |
 |-----|------------|
 | `https://ваш-домен.ru/` | Лендинг |
+| `https://ваш-домен.ru/privacy` | Политика обработки персональных данных |
+| `https://ваш-домен.ru/cookies` | Политика использования cookie |
 | `https://ваш-домен.ru/admin` | Админка (логин/пароль) |
 | `https://ваш-домен.ru/payments/yookassa/webhook` | Webhook ЮKassa |
 
@@ -35,9 +37,11 @@ dig +short ваш-домен.ru
 
 ```env
 # Сайт
-PUBLIC_SITE_NAME=Obormot Musoroglot
-PUBLIC_BOT_USERNAME=ObormotMusoroglot_bot
+PUBLIC_SITE_NAME=Код личности
+PUBLIC_BOT_USERNAME=YourBotUsername
 PUBLIC_SITE_URL=https://ваш-домен.ru
+PRIVACY_POLICY_URL=https://ваш-домен.ru/privacy
+COOKIES_POLICY_URL=https://ваш-домен.ru/cookies
 
 # HTTP только на localhost — снаружи заходит nginx
 ADMIN_WEB_HOST=127.0.0.1

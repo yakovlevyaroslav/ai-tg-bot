@@ -1,5 +1,4 @@
 import { computePersonalityCodes } from './personality-code-math.js';
-import { getAnswerStyleLabel } from './answer-style.js';
 
 const RANDOM_NAMES = [
   'Анна',
@@ -101,10 +100,6 @@ export function buildOnboardingSystemContext(data) {
     `- Код личности: ${codes.fullCode}`,
     '- Направления кода: астрология, Human Design, нумерология, Сюцай, ведическая астрология (Джойтиш)',
   ];
-
-  if (data.answer_style) {
-    lines.push(`- Стиль ответов: ${getAnswerStyleLabel(data.answer_style)}`);
-  }
 
   if (codes.astrologyCode) {
     lines.push(`- Код астрологии: ${codes.astrologyCode}`);

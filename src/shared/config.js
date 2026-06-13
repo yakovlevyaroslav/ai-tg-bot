@@ -173,13 +173,25 @@ export const config = {
   /** HTTP(S)-прокси для запросов к api.yookassa.ru (нужен, если основной сервер не в РФ).
    *  Формат: http://user:pass@host:port или http://host:port. Пусто — без прокси. */
   yookassaProxy: process.env.YOOKASSA_PROXY?.trim() || '',
-  publicSiteName: process.env.PUBLIC_SITE_NAME || 'AI Bot',
+  publicSiteName: process.env.PUBLIC_SITE_NAME || 'Код личности',
   publicSiteTagline:
     process.env.PUBLIC_SITE_TAGLINE ||
-    'Таролог, нумеролог и родолог в Telegram. Пополнение баланса и ответы на ваши вопросы.',
+    'Персональный код личности в Telegram: пять систем знаний в одном разборе и ответы на ваши вопросы.',
   publicBotUsername: (process.env.PUBLIC_BOT_USERNAME || '').replace(/^@/, ''),
   publicSiteUrl: (process.env.PUBLIC_SITE_URL || '').replace(/\/$/, ''),
   privacyPolicyUrl: (process.env.PRIVACY_POLICY_URL || '').trim(),
+  privacyPolicyFile: process.env.PRIVACY_POLICY_FILE?.trim() || '',
+  privacyOperatorName:
+    process.env.PRIVACY_OPERATOR_NAME?.trim() ||
+    process.env.PUBLIC_SITE_NAME?.trim() ||
+    'Код личности',
+  privacyPolicyUpdated: process.env.PRIVACY_POLICY_UPDATED?.trim() || '13.06.2025',
+  cookiesPolicyUrl: (process.env.COOKIES_POLICY_URL || '').trim(),
+  cookiesPolicyFile: process.env.COOKIES_POLICY_FILE?.trim() || '',
+  cookiesPolicyUpdated:
+    process.env.COOKIES_POLICY_UPDATED?.trim() ||
+    process.env.PRIVACY_POLICY_UPDATED?.trim() ||
+    '13.06.2025',
   publicBotLink: (() => {
     const user = (process.env.PUBLIC_BOT_USERNAME || '').replace(/^@/, '');
     return user ? `https://t.me/${user}` : 'https://t.me/';

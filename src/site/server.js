@@ -3,6 +3,8 @@ import { config } from '../shared/config.js';
 import { createAdminRouter } from './admin/routes.js';
 import { createYookassaWebhookHandler } from '../shared/yookassa/webhook.js';
 import { renderLandingPage } from './landing.js';
+import { renderPrivacyPage } from './privacy.js';
+import { renderCookiesPage } from './cookies.js';
 
 function basicAuth(req, res, next) {
   const header = req.headers.authorization;
@@ -44,6 +46,14 @@ export function startSiteServer({ onPaymentSuccess } = {}) {
 
   app.get('/', (_req, res) => {
     res.type('html').send(renderLandingPage());
+  });
+
+  app.get('/privacy', (_req, res) => {
+    res.type('html').send(renderPrivacyPage());
+  });
+
+  app.get('/cookies', (_req, res) => {
+    res.type('html').send(renderCookiesPage());
   });
 
   app.post(
