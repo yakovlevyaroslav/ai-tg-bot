@@ -42,16 +42,16 @@ export function scheduleYookassaPaymentPoll({ userId, paymentCode, onSuccess }) 
     try {
       const result = await checkYookassaPayment(userId, paymentCode);
 
+      if (result.reason === 'already_completed' || (result.ok && result.alreadyGranted)) {
+        stop('already_completed');
+        return;
+      }
+
       if (result.ok && !result.alreadyGranted) {
         if (onSuccess) {
           await onSuccess(result);
         }
         stop('succeeded');
-        return;
-      }
-
-      if (result.ok && result.alreadyGranted) {
-        stop('already_completed');
         return;
       }
 

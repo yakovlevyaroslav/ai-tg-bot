@@ -153,7 +153,7 @@ export async function handleCheckPaymentCallback(ctx, userId, paymentCode) {
     }
 
     if (result.ok && result.alreadyGranted) {
-      await ctx.answerCbQuery('Вопросы уже начислены');
+      await ctx.answerCbQuery('Токены уже начислены');
       return;
     }
 

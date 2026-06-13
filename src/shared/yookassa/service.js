@@ -1,5 +1,6 @@
 import { config } from '../config.js';
 import { formatRequests } from '../requests-format.js';
+import * as billing from '../billing.js';
 import * as payments from '../payments.js';
 import { createPayment, getPayment } from './client.js';
 
@@ -65,7 +66,14 @@ export async function checkYookassaPayment(userId, paymentCode) {
   }
 
   if (pending.status === 'completed') {
-    return { ok: true, reason: 'already_completed', pending };
+    const balanceAfter = await billing.getBalance(userId);
+    return {
+      ok: true,
+      reason: 'already_completed',
+      pending,
+      alreadyGranted: true,
+      balanceAfter,
+    };
   }
 
   if (!pending.external_payment_id) {

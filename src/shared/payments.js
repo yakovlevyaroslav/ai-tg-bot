@@ -63,7 +63,14 @@ export async function completeYookassaPayment(paymentCode, yookassaPaymentId) {
   }
 
   if (pending.status === 'completed') {
-    return { ok: false, reason: 'already_completed', pending };
+    const balanceAfter = await billing.getBalance(pending.user_id);
+    return {
+      ok: true,
+      reason: 'already_completed',
+      pending,
+      alreadyGranted: true,
+      balanceAfter,
+    };
   }
 
   if (pending.status === 'cancelled') {

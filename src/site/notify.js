@@ -12,7 +12,9 @@ export function buildPaymentSuccessText(result) {
 
 export async function notifyPaymentSuccess(result) {
   const chatId = result.pending?.telegram_id;
-  if (!chatId || result.alreadyGranted) {
+  const balanceAfter = Number(result.balanceAfter);
+
+  if (!chatId || result.alreadyGranted || !Number.isFinite(balanceAfter)) {
     return;
   }
 
