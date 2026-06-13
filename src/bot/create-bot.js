@@ -53,8 +53,10 @@ import {
   ANSWER_FOLLOWUP_TEXT,
   ALL_COMMANDS_TEXT,
   answerFollowupInlineKeyboard,
+  answerTopicChoiceInlineKeyboard,
   allCommandsInlineKeyboard,
-  scheduleAnswerFollowup,
+  beginContinueTopic,
+  beginNewTopic,
 } from './answer-followup.js';
 
 const TELEGRAM_MAX_LENGTH = 4096;
@@ -204,10 +206,9 @@ async function handleChatMessage(ctx, userId, text) {
 
     for (const [index, chunk] of chunks.entries()) {
       const isLast = index === chunks.length - 1;
-      await ctx.reply(isLast ? chunk + footer : chunk);
+      const text = isLast ? chunk + footer : chunk;
+      await ctx.reply(text, isLast ? answerTopicChoiceInlineKeyboard() : undefined);
     }
-
-    scheduleAnswerFollowup(ctx.telegram, ctx.chat.id);
   } catch (err) {
     console.error('Chat error:', err?.message ?? err);
     await billing.refund(userId, cost, chargeResult.transactionId, {
@@ -339,6 +340,18 @@ export function createBot() {
   bot.action('post:followup:commands', async (ctx) => {
     await ctx.answerCbQuery();
     await ctx.reply(ALL_COMMANDS_TEXT, allCommandsInlineKeyboard(ctx.from.id));
+  });
+
+  bot.action('post:followup:continue', async (ctx) => {
+    const { userId } = await registerUser(ctx);
+    await ctx.answerCbQuery();
+    await beginContinueTopic(ctx, userId);
+  });
+
+  bot.action('post:followup:new', async (ctx) => {
+    const { userId } = await registerUser(ctx);
+    await ctx.answerCbQuery();
+    await beginNewTopic(ctx, userId);
   });
 
   bot.action('post:followup:back', async (ctx) => {
@@ -484,6 +497,11 @@ export function createBot() {
 
     if (profile?.onboarding_step === 'question_confirm') {
       await handleQuestionConfirmReminder(ctx);
+      return;
+    }
+
+    if (profile?.onboarding_step === 'topic_continue') {
+      await handleChatMessage(ctx, userId, text);
       return;
     }
 

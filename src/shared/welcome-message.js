@@ -21,9 +21,13 @@ function welcomeBonusLine() {
 /** Текст приветствия на /start и кнопку «▶️ Старт». */
 export function buildWelcomeText(telegramId = null) {
   const template = config.welcomeMessageTemplate || DEFAULT_TEMPLATE;
+  const privacyPolicyUrl =
+    config.privacyPolicyUrl ||
+    (config.publicSiteUrl ? `${config.publicSiteUrl}/privacy` : '');
 
   return template
     .replace(/\{packages\}/g, formatPackagesLine(telegramId))
     .replace(/\{welcome_bonus_line\}/g, welcomeBonusLine())
-    .replace(/\{requests_per_message\}/g, formatTokens(config.requestsPerMessage));
+    .replace(/\{requests_per_message\}/g, formatTokens(config.requestsPerMessage))
+    .replace(/\{privacy_policy_url\}/g, privacyPolicyUrl);
 }

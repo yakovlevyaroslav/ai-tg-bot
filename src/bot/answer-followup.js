@@ -1,5 +1,5 @@
 import { Markup } from 'telegraf';
-import { config } from '../shared/config.js';
+import * as db from '../shared/db.js';
 import { getCommandsForUser } from './bot-commands.js';
 import { postActionsInlineKeyboard } from './keyboards.js';
 
@@ -18,6 +18,9 @@ export const ANSWER_FOLLOWUP_TEXT =
   'Хотите узнать что-то ещё?\n\n' +
   'Можете задать свой вопрос, выбрать из популярных — или открыть всё меню 👇';
 
+export const CONTINUE_TOPIC_TEXT =
+  'Напишите уточнение или продолжение вопроса по этой теме — учту предыдущий ответ.';
+
 export const ALL_COMMANDS_TEXT = '🗂️ Все доступные команды:';
 
 function truncateInlineButton(label) {
@@ -25,6 +28,15 @@ function truncateInlineButton(label) {
     return label;
   }
   return `${label.slice(0, INLINE_BUTTON_MAX - 1)}…`;
+}
+
+export function answerTopicChoiceInlineKeyboard() {
+  return Markup.inlineKeyboard([
+    [
+      Markup.button.callback('🔁 Продолжить эту тему', 'post:followup:continue'),
+      Markup.button.callback('✨ Начать новую', 'post:followup:new'),
+    ],
+  ]);
 }
 
 export function answerFollowupInlineKeyboard() {
@@ -42,12 +54,12 @@ export function allCommandsInlineKeyboard(telegramId) {
   return Markup.inlineKeyboard(rows);
 }
 
-export function scheduleAnswerFollowup(telegram, chatId) {
-  setTimeout(() => {
-    telegram
-      .sendMessage(chatId, ANSWER_FOLLOWUP_TEXT, answerFollowupInlineKeyboard())
-      .catch((err) => {
-        console.warn('[followup] send failed:', err?.message ?? err);
-      });
-  }, config.postAnswerFollowupDelayMs);
+export async function beginContinueTopic(ctx, userId) {
+  await db.setOnboardingStep(userId, 'topic_continue');
+  await ctx.reply(CONTINUE_TOPIC_TEXT);
+}
+
+export async function beginNewTopic(ctx, userId) {
+  await db.setOnboardingStep(userId, 'completed');
+  await ctx.reply(ANSWER_FOLLOWUP_TEXT, answerFollowupInlineKeyboard());
 }

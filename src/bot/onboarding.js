@@ -14,11 +14,9 @@ import {
   enrichOnboardingDataWithCodes,
 } from '../shared/onboarding-context.js';
 import { getUserErrorMessage } from '../shared/errors.js';
+import { buildWelcomeText } from '../shared/welcome-message.js';
 
 const MESSAGES = {
-  intro:
-    'Рады приветствовать тебя в системе определения жизненных векторов «Код личности».\n' +
-    'Заполни анкету, и ты получишь ответы',
   askName:
     'Мне нужно немного информации, чтобы определить твой код личности 🔢\n\n' +
     'Для начала скажи своё имя:',
@@ -31,7 +29,7 @@ const MESSAGES = {
   chooseBirthPlace: 'Выберите населённый пункт из списка:',
   confirmHint: 'Всё верно? Нажмите кнопку ниже 👇',
   thinking:
-    '🧠 Сейчас в раздумьях — свожу соционику, Human Design, астрологию и ведическую астрологию в единый портрет...',
+    '🧠 Сейчас в раздумьях — свожу астрологию, Human Design, нумерологию, Сюцай и ведическую астрологию в единый код личности...',
   calculationError:
     'Не удалось сформировать код личности. Попробуйте ещё раз: нажмите /start и пройдите анкету заново.',
 };
@@ -213,9 +211,11 @@ async function runCalculationLoading(ctx, userId) {
 
     await db.setOnboardingStep(userId, 'completed', {
       personality_code: result.codes.fullCode,
+      astrology_code: result.codes.astrologyCode,
+      human_design_code: result.codes.humanDesignCode,
       numerology_code: result.codes.numerologyCode,
-      socionics_code: result.codes.socionicsCode,
-      synthesis_code: result.codes.synthesisCode,
+      sucai_code: result.codes.sucaiCode,
+      jyotish_code: result.codes.jyotishCode,
       personality_code_result: result.content,
     });
     await db.setOnboardingCompleted(userId, true);
@@ -258,7 +258,7 @@ async function resolveBirthPlaceInput(ctx, userId, optionsPromise) {
 export async function startOnboarding(ctx, userId) {
   await db.resetOnboarding(userId);
   await dismissLegacyReplyKeyboard(ctx);
-  await ctx.reply(MESSAGES.intro);
+  await ctx.reply(buildWelcomeText(ctx.from?.id));
   await delay();
   await ctx.reply(MESSAGES.askName);
   await db.setOnboardingStep(userId, 'await_name');

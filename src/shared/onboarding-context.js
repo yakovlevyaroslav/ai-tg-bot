@@ -105,14 +105,17 @@ export function buildOnboardingSystemContext(data) {
     return '';
   }
 
+  const computed = computePersonalityCodes(data);
   const codes = data.personality_code
     ? {
         fullCode: data.personality_code,
-        numerologyCode: data.numerology_code,
-        socionicsCode: data.socionics_code,
-        synthesisCode: data.synthesis_code,
+        astrologyCode: data.astrology_code ?? computed.astrologyCode,
+        humanDesignCode: data.human_design_code ?? computed.humanDesignCode,
+        numerologyCode: data.numerology_code ?? computed.numerologyCode,
+        sucaiCode: data.sucai_code ?? computed.sucaiCode,
+        jyotishCode: data.jyotish_code ?? computed.jyotishCode,
       }
-    : computePersonalityCodes(data);
+    : computed;
 
   const lines = [
     'ДАННЫЕ АНКЕТЫ ПОЛЬЗОВАТЕЛЯ (обязательно используй в ответе):',
@@ -122,16 +125,23 @@ export function buildOnboardingSystemContext(data) {
     `- Время рождения: ${data.birth_time ?? '—'}`,
     `- Место рождения: ${data.birth_place_label ?? data.birth_place ?? '—'}`,
     `- Код личности: ${codes.fullCode}`,
+    '- Направления кода: астрология, Human Design, нумерология, Сюцай, ведическая астрология (Джойтиш)',
   ];
 
+  if (codes.astrologyCode) {
+    lines.push(`- Код астрологии: ${codes.astrologyCode}`);
+  }
+  if (codes.humanDesignCode) {
+    lines.push(`- Код Human Design: ${codes.humanDesignCode}`);
+  }
   if (codes.numerologyCode) {
     lines.push(`- Нумерологическое число: ${codes.numerologyCode}`);
   }
-  if (codes.socionicsCode) {
-    lines.push(`- Код соционики: ${codes.socionicsCode}`);
+  if (codes.sucaiCode) {
+    lines.push(`- Код Сюцай: ${codes.sucaiCode}`);
   }
-  if (codes.synthesisCode) {
-    lines.push(`- Код синтеза: ${codes.synthesisCode}`);
+  if (codes.jyotishCode) {
+    lines.push(`- Код Джойтиш: ${codes.jyotishCode}`);
   }
 
   if (data.personality_code_result) {
@@ -161,9 +171,11 @@ export function buildAdminSkipCodeMessage(data) {
     `Имя: ${data.name} · ${data.gender_label}\n` +
     `Рождение: ${data.birth_date} ${data.birth_time}\n` +
     `Место: ${data.birth_place_label}\n\n` +
-    `${codes.numerologyCode} — нумерологическое число\n` +
-    `${codes.socionicsCode} — код соционики\n` +
-    `${codes.synthesisCode} — код синтеза\n\n` +
+    `${codes.astrologyCode} — астрология\n` +
+    `${codes.humanDesignCode} — Human Design\n` +
+    `${codes.numerologyCode} — нумерология\n` +
+    `${codes.sucaiCode} — Сюцай\n` +
+    `${codes.jyotishCode} — ведическая астрология (Джойтиш)\n\n` +
     `Ответы на вопросы будут строиться на этих данных.`
   );
 }
@@ -173,8 +185,10 @@ export function enrichOnboardingDataWithCodes(data) {
   return {
     ...data,
     personality_code: codes.fullCode,
+    astrology_code: codes.astrologyCode,
+    human_design_code: codes.humanDesignCode,
     numerology_code: codes.numerologyCode,
-    socionics_code: codes.socionicsCode,
-    synthesis_code: codes.synthesisCode,
+    sucai_code: codes.sucaiCode,
+    jyotish_code: codes.jyotishCode,
   };
 }

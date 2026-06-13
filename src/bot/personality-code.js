@@ -65,12 +65,16 @@ export function buildPersonalityCodeMessages(data) {
     birth_time: data.birth_time,
     birth_place_label: data.birth_place_label,
     full_code: codes.fullCode,
+    astrology_code: codes.astrologyCode,
+    human_design_code: codes.humanDesignCode,
     numerology_code: codes.numerologyCode,
-    socionics_code: codes.socionicsCode,
-    synthesis_code: codes.synthesisCode,
+    sucai_code: codes.sucaiCode,
+    jyotish_code: codes.jyotishCode,
+    astrology_formula: codes.astrologyFormula,
+    human_design_formula: codes.humanDesignFormula,
     numerology_formula: codes.numerologyFormula,
-    socionics_formula: codes.socionicsFormula,
-    synthesis_formula: codes.synthesisFormula,
+    sucai_formula: codes.sucaiFormula,
+    jyotish_formula: codes.jyotishFormula,
   });
 
   return {

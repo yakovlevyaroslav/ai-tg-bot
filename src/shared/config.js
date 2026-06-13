@@ -179,6 +179,7 @@ export const config = {
     'Таролог, нумеролог и родолог в Telegram. Пополнение баланса и ответы на ваши вопросы.',
   publicBotUsername: (process.env.PUBLIC_BOT_USERNAME || '').replace(/^@/, ''),
   publicSiteUrl: (process.env.PUBLIC_SITE_URL || '').replace(/\/$/, ''),
+  privacyPolicyUrl: (process.env.PRIVACY_POLICY_URL || '').trim(),
   publicBotLink: (() => {
     const user = (process.env.PUBLIC_BOT_USERNAME || '').replace(/^@/, '');
     return user ? `https://t.me/${user}` : 'https://t.me/';

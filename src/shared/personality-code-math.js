@@ -16,6 +16,10 @@ function reduceNumber(value, keepMaster = true) {
   return n || 1;
 }
 
+function twoDigitCode(value) {
+  return String((Math.abs(Math.trunc(value)) % 90) + 10);
+}
+
 function nameDigitSum(name = '') {
   let sum = 0;
 
@@ -38,6 +42,14 @@ function hashLabel(value = '') {
   return hash;
 }
 
+function placeSeed(data) {
+  if (data.birth_place_lat != null && data.birth_place_lon != null) {
+    return Math.round(Math.abs(data.birth_place_lat * 100) + Math.abs(data.birth_place_lon * 100));
+  }
+
+  return hashLabel(data.birth_place_label || data.birth_place || '');
+}
+
 /** Детерминированные коды из анкеты — AI объясняет логику, но не меняет числа. */
 export function computePersonalityCodes(data) {
   const [day, month, year] = data.birth_date.split('.').map(Number);
@@ -48,27 +60,33 @@ export function computePersonalityCodes(data) {
   const numerologyCode = `${lifePath}${nameNumber}`;
 
   const genderOffset = data.gender === 'male' ? 11 : 13;
-  const socionicsRaw = hour * 60 + minute + day * month + genderOffset;
-  const socionicsCode = String((socionicsRaw % 900) + 100);
+  const birthPlaceSeed = placeSeed(data);
 
-  const placeSeed =
-    data.birth_place_lat != null && data.birth_place_lon != null
-      ? Math.round(Math.abs(data.birth_place_lat * 100) + Math.abs(data.birth_place_lon * 100))
-      : hashLabel(data.birth_place_label || data.birth_place || '');
-  const synthesisCode = String(((placeSeed + year + month * 7) % 900) + 100);
+  const astrologyCode = twoDigitCode(day + month * 31 + hour + genderOffset);
+  const humanDesignCode = twoDigitCode(hour * 60 + minute + day * month);
+  const sucaiCode = twoDigitCode(
+    sumDigits(day) + sumDigits(month) + sumDigits(year) + nameNumber * 7 + month,
+  );
+  const jyotishCode = twoDigitCode(birthPlaceSeed + year + month * 7 + hour + minute);
 
-  const fullCode = `${numerologyCode}${socionicsCode}${synthesisCode}`;
+  const fullCode = `${astrologyCode}${humanDesignCode}${numerologyCode}${sucaiCode}${jyotishCode}`;
 
   return {
     fullCode,
+    astrologyCode,
+    humanDesignCode,
     numerologyCode,
-    socionicsCode,
-    synthesisCode,
+    sucaiCode,
+    jyotishCode,
+    astrologyFormula:
+      `дата рождения ${data.birth_date}, время ${data.birth_time} и пол (${data.gender_label}) → код западной астрологии ${astrologyCode}`,
+    humanDesignFormula:
+      `время рождения ${data.birth_time} и день×месяц (${day}×${month}) → код Human Design ${humanDesignCode}`,
     numerologyFormula:
       `число жизненного пути ${lifePath} (из даты ${data.birth_date}) + число имени ${nameNumber} (из «${data.name}») → ${numerologyCode}`,
-    socionicsFormula:
-      `время рождения ${data.birth_time}, день×месяц (${day}×${month}) и пол (${data.gender_label}) → ${socionicsCode}`,
-    synthesisFormula:
-      `место рождения (${data.birth_place_label}) + год и месяц рождения → синтез астрологии, Human Design и ведической системы → ${synthesisCode}`,
+    sucaiFormula:
+      `дата рождения, имя «${data.name}» и энергия цифр 九宫术数 → код Сюцай ${sucaiCode}`,
+    jyotishFormula:
+      `место рождения (${data.birth_place_label}), дата и время → код ведической астрологии (Джойтиш) ${jyotishCode}`,
   };
 }
