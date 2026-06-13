@@ -1,30 +1,51 @@
 import { config } from './config.js';
 
 const NOMINATIM_BASE = 'https://nominatim.openstreetmap.org';
+const PHOTON_BASE = 'https://photon.komoot.io';
 const MAX_PLACES = 5;
 
 const ADDRESS_LEVELS = ['city', 'town', 'village', 'municipality', 'hamlet', 'county'];
 
-function userAgent() {
-  return `${config.publicSiteName}/1.0 (telegram-bot)`;
-}
-
-async function nominatimFetch(path, params) {
-  const url = new URL(path, NOMINATIM_BASE);
-  for (const [key, value] of Object.entries(params)) {
-    url.searchParams.set(key, String(value));
+function nominatimUserAgent() {
+  if (config.nominatimUserAgent) {
+    return config.nominatimUserAgent;
   }
 
+  const app = config.publicSiteName || 'PersonalityCodeBot';
+  const contact = config.nominatimContactEmail;
+
+  if (contact) {
+    return `${app}/1.0 (contact: ${contact})`;
+  }
+
+  return `${app}/1.0 (telegram-bot)`;
+}
+
+function buildFetchHeaders(service) {
+  const headers = {
+    Accept: 'application/json',
+    'User-Agent': nominatimUserAgent(),
+  };
+
+  if (service === 'nominatim') {
+    headers['Accept-Language'] = 'ru';
+    if (config.publicSiteUrl) {
+      headers.Referer = config.publicSiteUrl;
+    }
+  }
+
+  return headers;
+}
+
+async function fetchJson(url, { service = 'nominatim' } = {}) {
   const response = await fetch(url, {
-    headers: {
-      'User-Agent': userAgent(),
-      Accept: 'application/json',
-      'Accept-Language': 'ru',
-    },
+    headers: buildFetchHeaders(service),
+    signal: AbortSignal.timeout(config.geocodingTimeoutMs),
   });
 
   if (!response.ok) {
-    throw new Error(`Nominatim HTTP ${response.status}`);
+    const body = await response.text().catch(() => '');
+    throw new Error(`${service} HTTP ${response.status}${body ? `: ${body.slice(0, 120)}` : ''}`);
   }
 
   return response.json();
@@ -102,6 +123,29 @@ function placeFromSearchResult(item) {
   };
 }
 
+function placeFromPhotonFeature(feature) {
+  const [lon, lat] = feature.geometry?.coordinates ?? [];
+  const props = feature.properties ?? {};
+  const name =
+    props.city || props.name || props.locality || props.county || props.state || props.country;
+
+  if (!name || !Number.isFinite(lat) || !Number.isFinite(lon)) {
+    return null;
+  }
+
+  const region = props.state || props.county || null;
+  const country = props.country || null;
+
+  return {
+    label: buildPlaceLabel(name, region, country),
+    name,
+    region,
+    country,
+    lat,
+    lon,
+  };
+}
+
 function dedupePlaces(places) {
   const seen = new Set();
   const result = [];
@@ -121,15 +165,15 @@ function dedupePlaces(places) {
   return result;
 }
 
-/** Поиск населённых пунктов по названию */
-export async function searchBirthPlaces(query) {
-  const items = await nominatimFetch('/search', {
-    q: query.trim(),
-    format: 'json',
-    addressdetails: 1,
-    limit: MAX_PLACES,
-    'accept-language': 'ru',
-  });
+async function searchNominatim(query) {
+  const url = new URL('/search', NOMINATIM_BASE);
+  url.searchParams.set('q', query.trim());
+  url.searchParams.set('format', 'json');
+  url.searchParams.set('addressdetails', '1');
+  url.searchParams.set('limit', String(MAX_PLACES));
+  url.searchParams.set('accept-language', 'ru');
+
+  const items = await fetchJson(url, { service: 'nominatim' });
 
   if (!Array.isArray(items) || items.length === 0) {
     return [];
@@ -138,19 +182,69 @@ export async function searchBirthPlaces(query) {
   return dedupePlaces(items.map(placeFromSearchResult));
 }
 
+async function searchPhoton(query) {
+  const url = new URL('/api/', PHOTON_BASE);
+  url.searchParams.set('q', query.trim());
+  url.searchParams.set('limit', String(MAX_PLACES));
+  url.searchParams.set('lang', 'en');
+
+  const data = await fetchJson(url, { service: 'photon' });
+  const features = Array.isArray(data?.features) ? data.features : [];
+
+  return dedupePlaces(
+    features.map(placeFromPhotonFeature).filter(Boolean),
+  );
+}
+
+/** Поиск населённых пунктов по названию */
+export async function searchBirthPlaces(query) {
+  const trimmed = query.trim();
+  if (!trimmed) {
+    return [];
+  }
+
+  let nominatimError = null;
+
+  try {
+    const places = await searchNominatim(trimmed);
+    if (places.length > 0) {
+      return places;
+    }
+  } catch (err) {
+    nominatimError = err;
+    console.warn('[geocoding] Nominatim failed:', err?.message ?? err);
+  }
+
+  try {
+    const places = await searchPhoton(trimmed);
+    if (places.length > 0) {
+      return places;
+    }
+  } catch (err) {
+    console.warn('[geocoding] Photon failed:', err?.message ?? err);
+    if (nominatimError) {
+      throw nominatimError;
+    }
+    throw err;
+  }
+
+  return [];
+}
+
 /** Варианты места по координатам геолокации */
 export async function birthPlacesFromCoordinates(latitude, longitude) {
   const lat = Number(latitude);
   const lon = Number(longitude);
 
-  const item = await nominatimFetch('/reverse', {
-    lat,
-    lon,
-    format: 'json',
-    addressdetails: 1,
-    zoom: 10,
-    'accept-language': 'ru',
-  });
+  const url = new URL('/reverse', NOMINATIM_BASE);
+  url.searchParams.set('lat', String(lat));
+  url.searchParams.set('lon', String(lon));
+  url.searchParams.set('format', 'json');
+  url.searchParams.set('addressdetails', '1');
+  url.searchParams.set('zoom', '10');
+  url.searchParams.set('accept-language', 'ru');
+
+  const item = await fetchJson(url, { service: 'nominatim' });
 
   if (!item || item.error) {
     return [];
@@ -177,4 +271,13 @@ export async function birthPlacesFromCoordinates(latitude, longitude) {
       lon,
     },
   ];
+}
+
+export function warnIfGeocodingMisconfigured() {
+  if (!config.nominatimContactEmail && !config.nominatimUserAgent) {
+    console.warn(
+      '[geocoding] NOMINATIM_CONTACT_EMAIL is not set — Nominatim may block city search on production. ' +
+        'Set NOMINATIM_CONTACT_EMAIL in .env (see .env.example).',
+    );
+  }
 }

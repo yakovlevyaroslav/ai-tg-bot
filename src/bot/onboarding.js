@@ -257,18 +257,41 @@ async function presentBirthPlaceOptions(ctx, userId, options) {
   });
 }
 
-async function resolveBirthPlaceInput(ctx, userId, optionsPromise) {
+async function continueWithManualBirthPlace(ctx, userId, query) {
+  const place = query.trim();
+  if (!place) {
+    await ctx.reply('Напишите название города.');
+    return;
+  }
+
+  await db.setOnboardingStep(userId, 'await_confirm', {
+    birth_place: place,
+    birth_place_label: place,
+    birth_place_lat: null,
+    birth_place_lon: null,
+    place_options: null,
+  });
+
+  await ctx.reply(
+    'Не удалось уточнить место в справочнике — сохраню введённое название. Проверьте данные:',
+  );
+
+  const updated = await db.getUserProfile(userId);
+  await sendSummaryForConfirm(ctx, userId, updated.onboarding_data);
+}
+
+async function resolveBirthPlaceInput(ctx, userId, optionsPromise, query) {
   let options;
   try {
     options = await optionsPromise;
   } catch (err) {
     console.error('Geocoding error:', err?.message ?? err);
-    await ctx.reply('Не удалось определить место. Напишите название ещё раз.');
+    await continueWithManualBirthPlace(ctx, userId, query);
     return;
   }
 
   if (!options.length) {
-    await ctx.reply('Такой населённый пункт не найден. Уточните название.');
+    await continueWithManualBirthPlace(ctx, userId, query);
     return;
   }
 
@@ -401,7 +424,7 @@ export async function handleOnboardingText(ctx, userId, text, profile) {
       return true;
     }
 
-    await resolveBirthPlaceInput(ctx, userId, searchBirthPlaces(query));
+    await resolveBirthPlaceInput(ctx, userId, searchBirthPlaces(query), query);
     return true;
   }
 
