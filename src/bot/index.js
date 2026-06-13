@@ -6,7 +6,6 @@ import { initDb, closeDb } from '../shared/db.js';
 import { createBot } from './create-bot.js';
 import { formatTelegramStartError, launchBot } from './launch.js';
 import { setupDefaultBotCommands } from './bot-commands.js';
-import { warnIfGeocodingMisconfigured } from '../shared/geocoding.js';
 
 export async function runBot({ setupSignals = true, skipInit = false } = {}) {
   if (!skipInit) {
@@ -15,7 +14,6 @@ export async function runBot({ setupSignals = true, skipInit = false } = {}) {
   }
 
   const bot = createBot();
-  warnIfGeocodingMisconfigured();
   let botRunning = false;
 
   const shutdown = async (signal) => {

@@ -17,14 +17,14 @@ const RANDOM_NAMES = [
 ];
 
 const RANDOM_CITIES = [
-  { place: 'Москва', label: 'Москва, Россия', lat: 55.7558, lon: 37.6173 },
-  { place: 'Санкт-Петербург', label: 'Санкт-Петербург, Россия', lat: 59.9343, lon: 30.3351 },
-  { place: 'Казань', label: 'Казань, Россия', lat: 55.8304, lon: 49.0661 },
-  { place: 'Новосибирск', label: 'Новосибирск, Россия', lat: 55.0084, lon: 82.9357 },
-  { place: 'Екатеринбург', label: 'Екатеринбург, Россия', lat: 56.8389, lon: 60.6057 },
-  { place: 'Краснодар', label: 'Краснодар, Россия', lat: 45.0355, lon: 38.9753 },
-  { place: 'Сочи', label: 'Сочи, Россия', lat: 43.6028, lon: 39.7342 },
-  { place: 'Томск', label: 'Томск, Россия', lat: 56.4846, lon: 84.9482 },
+  'Москва',
+  'Санкт-Петербург',
+  'Казань',
+  'Новосибирск',
+  'Екатеринбург',
+  'Краснодар',
+  'Сочи',
+  'Томск',
 ];
 
 function pad2(value) {
@@ -52,10 +52,8 @@ export function generateRandomOnboardingData() {
     gender_label,
     birth_date: `${pad2(day)}.${pad2(month)}.${year}`,
     birth_time: `${pad2(hour)}:${pad2(minute)}`,
-    birth_place: city.place,
-    birth_place_label: city.label,
-    birth_place_lat: city.lat,
-    birth_place_lon: city.lon,
+    birth_place: city,
+    birth_place_label: city,
   };
 }
 

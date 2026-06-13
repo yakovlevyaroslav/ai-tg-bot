@@ -30,7 +30,6 @@ import {
   startOnboarding,
   handleOnboardingText,
   handleOnboardingGender,
-  handleOnboardingPlaceChoice,
   handleOnboardingConfirm,
   handleOnboardingAnswerStyle,
   skipOnboardingForAdmin,
@@ -374,11 +373,6 @@ export function createBot() {
   bot.action(/^onboard:style:(simple|professional)$/, async (ctx) => {
     const { userId } = await registerUser(ctx);
     await handleOnboardingAnswerStyle(ctx, userId, ctx.match[1]);
-  });
-
-  bot.action(/^onboard:place:(\d+)$/, async (ctx) => {
-    const { userId } = await registerUser(ctx);
-    await handleOnboardingPlaceChoice(ctx, userId, ctx.match[1]);
   });
 
   bot.action(/^onboard:confirm:(yes|no)$/, async (ctx) => {

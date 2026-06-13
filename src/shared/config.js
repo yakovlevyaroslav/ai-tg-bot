@@ -180,13 +180,6 @@ export const config = {
   publicBotUsername: (process.env.PUBLIC_BOT_USERNAME || '').replace(/^@/, ''),
   publicSiteUrl: (process.env.PUBLIC_SITE_URL || '').replace(/\/$/, ''),
   privacyPolicyUrl: (process.env.PRIVACY_POLICY_URL || '').trim(),
-  /** Email для User-Agent Nominatim (обязателен на проде, иначе OSM блокирует запросы) */
-  nominatimContactEmail:
-    process.env.NOMINATIM_CONTACT_EMAIL?.trim() ||
-    process.env.YOOKASSA_RECEIPT_EMAIL?.trim() ||
-    '',
-  nominatimUserAgent: process.env.NOMINATIM_USER_AGENT?.trim() || '',
-  geocodingTimeoutMs: Number(process.env.GEOCODING_TIMEOUT_MS || 12000),
   publicBotLink: (() => {
     const user = (process.env.PUBLIC_BOT_USERNAME || '').replace(/^@/, '');
     return user ? `https://t.me/${user}` : 'https://t.me/';
