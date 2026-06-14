@@ -103,10 +103,10 @@ export const POPULAR_QUESTIONS = [
 
 export const POST_ONBOARDING_TEXT =
   'Вот мы и посмотрели самую поверхностную характеристику твоего кода личности. Уже отлично! 💫 Думаю, нам стоит покопаться глубже\n\n' +
-  'Чтобы выбрать вопрос, нажми ниже на кнопку «Вопросы». ' +
-  'В бесплатном тарифе у тебя есть возможность спросить меня 1 раз. ' +
+  'Чтобы выбрать вопрос, нажми ниже на кнопку «Вопросы».\n' +
+  'В бесплатном тарифе у тебя есть возможность спросить меня 1 раз.\n' +
   'Ещё ты можешь задать свой вопрос, выбрав платный тариф\n\n' +
-  'Готов тебе послужить 🙏';
+  'Готов помочь найти ответы 🙏';
 
 export const QUESTIONS_MENU_TEXT =
   '❓ Выберите, как хотите задать вопрос:';
@@ -178,11 +178,8 @@ export async function sendPopularTopicMenu(ctx, questionId) {
   );
 }
 
-export async function sendTariffsIntro(ctx, userId = null) {
+export async function sendTariffsIntro(ctx) {
   const telegramId = ctx.from?.id;
-  if (userId) {
-    trackEvent(userId, EVENTS.TARIFFS_OPENED, { source: 'post_onboarding' });
-  }
   await ctx.reply(formatTariffsMessage(telegramId), tariffsInlineKeyboard(telegramId));
 }
 
@@ -225,6 +222,6 @@ export async function handlePostOnboardingCallback(ctx, action, subAction = null
 
   if (action === 'tariffs') {
     await ctx.answerCbQuery();
-    await sendTariffsIntro(ctx, userId);
+    await sendTariffsIntro(ctx);
   }
 }

@@ -149,8 +149,8 @@ export const config = {
   systemPrompt: loadSystemPrompt(),
   /** Списание за один ответ бота (обычно 1) */
   requestsPerMessage: Number(process.env.REQUESTS_PER_MESSAGE || 1),
-  /** Бесплатные вопросы при первом /start (0 — без бонуса) */
-  welcomeBonusRequests: Number(process.env.WELCOME_BONUS_REQUESTS || 0),
+  /** Бесплатные вопросы при первом /start (0 — без бонуса). Базовый разбор кода личности бесплатен. */
+  welcomeBonusRequests: Number(process.env.WELCOME_BONUS_REQUESTS ?? 1),
   /** Шаблон приветствия на /start; null — текст по умолчанию. Плейсхолдеры: {packages}, {welcome_bonus_line}, {requests_per_message} */
   welcomeMessageTemplate: loadWelcomeMessageTemplate(),
   /** Тарифы: рубли:кол-во вопросов (публичные) */
