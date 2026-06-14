@@ -219,7 +219,7 @@ export const config = {
   /** Порог: при остатке ниже — кнопка «Тарифы» под ответами после списания */
   lowTokensTariffsThreshold: Number(process.env.LOW_TOKENS_TARIFFS_THRESHOLD || 3),
   /** Публикация визитки кода личности на сайте (₽) */
-  visitCardPriceRub: Number(process.env.VISIT_CARD_PRICE_RUB || 1000),
+  visitCardPriceRub: Number(process.env.VISIT_CARD_PRICE_RUB || 777),
 };
 
 if (config.aiProvider === 'openai' && !config.openaiApiKey) {
