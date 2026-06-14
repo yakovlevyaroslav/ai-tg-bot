@@ -35,6 +35,7 @@ export function layout(title, activeNav, body) {
     { href: '/admin/analytics', label: 'Воронка', key: 'analytics' },
     { href: '/admin/users', label: 'Пользователи', key: 'users' },
     { href: '/admin/payments', label: 'Оплаты', key: 'payments' },
+    { href: '/admin/visit-cards', label: 'Визитки', key: 'visit-cards' },
   ];
 
   const navHtml = nav

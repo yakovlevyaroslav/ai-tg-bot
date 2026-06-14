@@ -16,6 +16,9 @@ export const EVENTS = {
   PAYMENT_PACKAGE_SELECTED: 'payment.package_selected',
   PAYMENT_CREATED: 'payment.created',
   PAYMENT_COMPLETED: 'payment.completed',
+  VISIT_CARD_OPENED: 'visit_card.opened',
+  VISIT_CARD_BUY_CLICKED: 'visit_card.buy_clicked',
+  VISIT_CARD_PUBLISHED: 'visit_card.published',
   FOLLOWUP_CONTINUE: 'followup.continue',
   FOLLOWUP_NEW: 'followup.new',
 };

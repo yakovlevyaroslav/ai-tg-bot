@@ -36,6 +36,12 @@ import {
   isOnboardingBlocking,
 } from './onboarding.js';
 import {
+  sendVisitCardMenu,
+  handleVisitCardBuy,
+  handleVisitCardBack,
+  handleVisitCardPayBack,
+} from './visit-card.js';
+import {
   handlePostOnboardingCallback,
   sendPopularTopicMenu,
   getPopularSubquestion,
@@ -105,7 +111,9 @@ async function sendBalance(ctx, userId = null) {
       `✅ Зачислено +${formatQuestions(yookassaSync.pending.credits_amount)} после оплаты\n\n` + text;
   }
 
-  await ctx.reply(text, balanceTariffsInlineKeyboard());
+  await ctx.reply(text, balanceTariffsInlineKeyboard({
+    visitCardPublished: await db.isVisitCardPublished(id),
+  }));
 }
 
 async function sendRestart(ctx, userId) {
@@ -157,7 +165,12 @@ async function handleChatMessage(ctx, userId, text) {
         balance: err.balance,
         required: err.required,
       });
-      await ctx.reply(getUserErrorMessage(err), balanceTariffsInlineKeyboard());
+      await ctx.reply(
+        getUserErrorMessage(err),
+        balanceTariffsInlineKeyboard({
+          visitCardPublished: await db.isVisitCardPublished(userId),
+        }),
+      );
       return;
     }
     throw err;
@@ -202,9 +215,12 @@ async function handleChatMessage(ctx, userId, text) {
       reason: 'api_error',
     });
     const balance = await billing.getBalance(userId);
+    const visitCardPublished = await db.isVisitCardPublished(userId);
     await ctx.reply(
       getUserErrorMessage(err) + formatBalanceLine(balance),
-      shouldOfferTariffs(balance) ? balanceTariffsInlineKeyboard() : undefined,
+      shouldOfferTariffs(balance)
+        ? balanceTariffsInlineKeyboard({ visitCardPublished })
+        : undefined,
     );
   }
 }
@@ -253,6 +269,16 @@ async function handleMenuCommand(ctx, userId, command) {
 
 export function createBot() {
   const bot = new Telegraf(config.telegramToken);
+
+  bot.catch((err, ctx) => {
+    console.error('[bot] unhandled error:', err?.message ?? err);
+    if (err?.stack) {
+      console.error(err.stack);
+    }
+    if (ctx?.updateType) {
+      console.error('[bot] update type:', ctx.updateType);
+    }
+  });
 
   bot.use(
     createAccessGateMiddleware({
@@ -339,8 +365,9 @@ export function createBot() {
   });
 
   bot.action('post:followup:back', async (ctx) => {
+    const { userId } = await registerUser(ctx);
     await ctx.answerCbQuery();
-    await ctx.reply(ANSWER_FOLLOWUP_TEXT, answerFollowupInlineKeyboard());
+    await ctx.reply(ANSWER_FOLLOWUP_TEXT, await answerFollowupInlineKeyboard(userId));
   });
 
   bot.action(/^menu:cmd:(.+)$/, async (ctx) => {
@@ -441,8 +468,40 @@ export function createBot() {
   });
 
   bot.action('post:tariffs:back', async (ctx) => {
+    const { userId } = await registerUser(ctx);
     await ctx.answerCbQuery();
-    await ctx.reply(POST_ONBOARDING_TEXT, postOnboardingInlineKeyboard());
+    const visitCardPublished = await db.isVisitCardPublished(userId);
+    await ctx.reply(
+      POST_ONBOARDING_TEXT,
+      postOnboardingInlineKeyboard({ visitCardPublished }),
+    );
+  });
+
+  bot.action('post:tariffs:visit_card', async (ctx) => {
+    const { userId } = await registerUser(ctx);
+    await ctx.answerCbQuery();
+    await sendVisitCardMenu(ctx, userId);
+  });
+
+  bot.action('post:visit_card', async (ctx) => {
+    const { userId } = await registerUser(ctx);
+    await ctx.answerCbQuery();
+    await sendVisitCardMenu(ctx, userId);
+  });
+
+  bot.action('post:visit_card:buy', async (ctx) => {
+    const { userId } = await registerUser(ctx);
+    await handleVisitCardBuy(ctx, userId);
+  });
+
+  bot.action('post:visit_card:back', async (ctx) => {
+    const { userId } = await registerUser(ctx);
+    await handleVisitCardBack(ctx, userId);
+  });
+
+  bot.action('post:visit_card:pay:back', async (ctx) => {
+    const { userId } = await registerUser(ctx);
+    await handleVisitCardPayBack(ctx, userId);
   });
 
   bot.on('text', async (ctx) => {

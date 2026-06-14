@@ -29,7 +29,7 @@ const MESSAGES = {
     'И последнее — напиши город или населённый пункт рождения. Например: Москва',
   confirmHint: 'Всё верно? Нажмите кнопку ниже 👇',
   thinking:
-    '🧠 Сейчас в раздумьях — свожу астрологию, Human Design, нумерологию, Сюцай и ведическую астрологию в единый код личности...',
+    '🧠 Сейчас в раздумьях — свожу Астрологию, Human Design, Нумерологию, Сюцай и Ведическую Астрологию в единый код личности...',
   calculationError:
     'Не удалось сформировать код личности. Попробуйте ещё раз: нажмите /start и пройдите анкету заново.',
 };
@@ -158,34 +158,47 @@ async function sendSummaryForConfirm(ctx, userId, data) {
   await db.setOnboardingStep(userId, 'await_confirm');
 }
 
-async function runCalculationLoading(ctx, userId) {
-  for (const [index, phrase] of LOADING_PHRASES.entries()) {
-    await ctx.sendChatAction('typing');
-    await ctx.reply(phrase);
-    if (index < LOADING_PHRASES.length - 1) {
-      await pulseTyping(ctx, config.onboardingCalculationDelayMs);
-    }
+async function stopTypingLoop(typingLoop) {
+  if (!typingLoop) {
+    return;
   }
 
-  await pulseTyping(ctx, config.onboardingCalculationDelayMs);
-  await ctx.reply(MESSAGES.thinking);
-  await pulseTyping(ctx, config.onboardingCalculationDelayMs);
+  try {
+    await typingLoop;
+  } catch {
+    // Фоновый typing не должен ломать основной поток
+  }
+}
 
-  const profile = await db.getUserProfile(userId);
-  const data = profile?.onboarding_data;
-
-  let typingActive = true;
-  const typingLoop = (async () => {
-    while (typingActive) {
-      await ctx.sendChatAction('typing');
-      await delay(4000);
-    }
-  })();
+async function runCalculationLoading(ctx, userId) {
+  let typingActive = false;
+  let typingLoop = null;
 
   try {
+    for (const [index, phrase] of LOADING_PHRASES.entries()) {
+      await ctx.sendChatAction('typing').catch(() => {});
+      await ctx.reply(phrase);
+      if (index < LOADING_PHRASES.length - 1) {
+        await pulseTyping(ctx, config.onboardingCalculationDelayMs);
+      }
+    }
+
+    await pulseTyping(ctx, config.onboardingCalculationDelayMs);
+    await ctx.reply(MESSAGES.thinking);
+    await pulseTyping(ctx, config.onboardingCalculationDelayMs);
+
+    const profile = await db.getUserProfile(userId);
+    const data = profile?.onboarding_data;
+
+    typingActive = true;
+    typingLoop = (async () => {
+      while (typingActive) {
+        await ctx.sendChatAction('typing').catch(() => {});
+        await delay(4000);
+      }
+    })();
+
     const result = await generatePersonalityCode(data);
-    typingActive = false;
-    await typingLoop;
 
     const chunks = splitPersonalityCodeReply(result.content);
 
@@ -193,7 +206,7 @@ async function runCalculationLoading(ctx, userId) {
       await replyFormatted(ctx, chunk);
     }
 
-    await db.setOnboardingStep(userId, 'completed', {
+    await db.assignPersonalityCode(userId, result.codes.fullCode, {
       personality_code: result.codes.fullCode,
       astrology_code: result.codes.astrologyCode,
       human_design_code: result.codes.humanDesignCode,
@@ -202,18 +215,20 @@ async function runCalculationLoading(ctx, userId) {
       jyotish_code: result.codes.jyotishCode,
       personality_code_result: result.content,
     });
+    await db.setOnboardingStep(userId, 'completed');
     await db.setOnboardingCompleted(userId, true);
     trackEvent(userId, EVENTS.PERSONALITY_CODE_GENERATED, { model: result.model });
-    await sendPostOnboardingOffer(ctx);
+    await sendPostOnboardingOffer(ctx, userId);
   } catch (err) {
-    typingActive = false;
-    await typingLoop;
     console.error('Personality code error:', err?.message ?? err);
     await db.setOnboardingStep(userId, 'calculation_failed');
     trackEvent(userId, EVENTS.PERSONALITY_CODE_FAILED, {
       code: err?.code ?? err?.message ?? 'unknown',
     });
     await ctx.reply(getUserErrorMessage(err) || MESSAGES.calculationError);
+  } finally {
+    typingActive = false;
+    await stopTypingLoop(typingLoop);
   }
 }
 
@@ -253,15 +268,16 @@ export async function skipOnboardingForAdmin(ctx, userId) {
   const randomData = enrichOnboardingDataWithCodes(generateRandomOnboardingData());
   const stubResult = buildAdminSkipCodeMessage(randomData);
 
-  await db.setOnboardingStep(userId, 'completed', {
+  await db.assignPersonalityCode(userId, randomData.personality_code, {
     ...randomData,
     personality_code_result: stubResult,
     skipped_by_admin: true,
   });
+  await db.setOnboardingStep(userId, 'completed');
   await db.setOnboardingCompleted(userId, true);
 
   await ctx.reply(stubResult, dismissReplyKeyboard());
-  await sendPostOnboardingOffer(ctx);
+  await sendPostOnboardingOffer(ctx, userId);
 }
 
 export async function handleOnboardingText(ctx, userId, text, profile) {
@@ -369,7 +385,17 @@ export async function handleOnboardingGender(ctx, userId, gender) {
 
 export async function handleOnboardingConfirm(ctx, userId, decision) {
   const profile = await db.getUserProfile(userId);
-  if (!profile || profile.onboarding_step !== 'await_confirm') {
+  if (!profile) {
+    await ctx.answerCbQuery('Сначала пройдите анкету — /start');
+    return;
+  }
+
+  if (profile.onboarding_step === 'calculating') {
+    await ctx.answerCbQuery('Расчёт уже идёт — подождите или нажмите /start');
+    return;
+  }
+
+  if (profile.onboarding_step !== 'await_confirm') {
     await ctx.answerCbQuery('Сначала проверьте данные анкеты');
     return;
   }
@@ -386,5 +412,12 @@ export async function handleOnboardingConfirm(ctx, userId, decision) {
   await ctx.answerCbQuery('Начинаем расчёт');
   trackEvent(userId, EVENTS.ONBOARDING_CONFIRM, { decision: 'yes' });
   await db.setOnboardingStep(userId, 'calculating');
-  await runCalculationLoading(ctx, userId);
+
+  try {
+    await runCalculationLoading(ctx, userId);
+  } catch (err) {
+    console.error('[onboarding] calculation failed:', err?.message ?? err);
+    await db.setOnboardingStep(userId, 'calculation_failed').catch(() => {});
+    await ctx.reply(MESSAGES.calculationError).catch(() => {});
+  }
 }

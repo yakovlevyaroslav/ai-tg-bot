@@ -5,6 +5,8 @@ import { createYookassaWebhookHandler } from '../shared/yookassa/webhook.js';
 import { renderLandingPage } from './landing.js';
 import { renderPrivacyPage } from './privacy.js';
 import { renderCookiesPage } from './cookies.js';
+import { renderVisitCardPage, renderVisitCardNotFoundPage } from './visit-card-page.js';
+import { getPublishedVisitCard } from '../shared/db.js';
 
 function basicAuth(req, res, next) {
   const header = req.headers.authorization;
@@ -54,6 +56,20 @@ export function startSiteServer({ onPaymentSuccess } = {}) {
 
   app.get('/cookies', (_req, res) => {
     res.type('html').send(renderCookiesPage());
+  });
+
+  app.get('/code/:code', async (req, res) => {
+    try {
+      const card = await getPublishedVisitCard(req.params.code);
+      if (!card) {
+        res.status(404).type('html').send(renderVisitCardNotFoundPage());
+        return;
+      }
+      res.type('html').send(renderVisitCardPage(card));
+    } catch (err) {
+      console.error('[site] visit card error:', err?.message ?? err);
+      res.status(500).send('Ошибка загрузки страницы');
+    }
   });
 
   app.post(

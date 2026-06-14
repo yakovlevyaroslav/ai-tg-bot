@@ -150,8 +150,12 @@ export function getPopularSubquestion(parentId, subId) {
   };
 }
 
-export async function sendPostOnboardingOffer(ctx) {
-  await ctx.reply(POST_ONBOARDING_TEXT, postOnboardingInlineKeyboard());
+export async function sendPostOnboardingOffer(ctx, userId) {
+  const visitCardPublished = userId ? await db.isVisitCardPublished(userId) : false;
+  await ctx.reply(
+    POST_ONBOARDING_TEXT,
+    postOnboardingInlineKeyboard({ visitCardPublished }),
+  );
 }
 
 export async function sendQuestionsMenu(ctx) {
@@ -178,9 +182,13 @@ export async function sendPopularTopicMenu(ctx, questionId) {
   );
 }
 
-export async function sendTariffsIntro(ctx) {
+export async function sendTariffsIntro(ctx, userId = null) {
   const telegramId = ctx.from?.id;
-  await ctx.reply(formatTariffsMessage(telegramId), tariffsInlineKeyboard(telegramId));
+  const visitCardPublished = userId ? await db.isVisitCardPublished(userId) : false;
+  await ctx.reply(
+    formatTariffsMessage(telegramId),
+    tariffsInlineKeyboard(telegramId, visitCardPublished),
+  );
 }
 
 export async function handlePostOnboardingCallback(ctx, action, subAction = null, userId = null) {
@@ -212,7 +220,11 @@ export async function handlePostOnboardingCallback(ctx, action, subAction = null
     }
 
     if (subAction === 'back') {
-      await ctx.reply(POST_ONBOARDING_TEXT, postOnboardingInlineKeyboard());
+      const visitCardPublished = userId ? await db.isVisitCardPublished(userId) : false;
+      await ctx.reply(
+        POST_ONBOARDING_TEXT,
+        postOnboardingInlineKeyboard({ visitCardPublished }),
+      );
       return;
     }
 
@@ -222,6 +234,6 @@ export async function handlePostOnboardingCallback(ctx, action, subAction = null
 
   if (action === 'tariffs') {
     await ctx.answerCbQuery();
-    await sendTariffsIntro(ctx);
+    await sendTariffsIntro(ctx, userId);
   }
 }

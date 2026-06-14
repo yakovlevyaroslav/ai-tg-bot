@@ -16,14 +16,15 @@ import { scheduleYookassaPaymentPoll } from '../shared/yookassa/poll.js';
 import { notifyPaymentSuccess, buildPaymentSuccessText } from '../site/notify.js';
 import { config } from '../shared/config.js';
 import { EVENTS, trackEvent } from '../shared/analytics.js';
-import { postActionsInlineKeyboard } from './keyboards.js';
+import { postActionsInlineKeyboard, visitCardTariffsRow } from './keyboards.js';
+import { isVisitCardPublished } from '../shared/db.js';
 
 function packageButtonLabel(pkg, publicIndex = 0) {
   const { emoji, title } = getPackagePresentation(pkg, publicIndex);
   return `${emoji} ${pkg.rub} ₽ · ${title}`;
 }
 
-function buildPackagesInlineKeyboard(telegramId, backCallback = 'buy:cancel') {
+function buildPackagesInlineKeyboard(telegramId, backCallback = 'buy:cancel', visitCardPublished = false) {
   const packages = getTopupPackagesForUser(telegramId);
   let publicIndex = 0;
   const buttons = packages.map((pkg) => {
@@ -40,17 +41,24 @@ function buildPackagesInlineKeyboard(telegramId, backCallback = 'buy:cancel') {
   for (let i = 0; i < buttons.length; i += 2) {
     rows.push(buttons.slice(i, i + 2));
   }
+
+  if (visitCardPublished) {
+    rows.push(visitCardTariffsRow(true));
+  } else {
+    rows.push(visitCardTariffsRow(false));
+  }
+
   rows.push([Markup.button.callback('◀️ Назад', backCallback)]);
 
   return Markup.inlineKeyboard(rows);
 }
 
-export function topupInlineKeyboard(telegramId) {
-  return buildPackagesInlineKeyboard(telegramId, 'buy:cancel');
+export function topupInlineKeyboard(telegramId, visitCardPublished = false) {
+  return buildPackagesInlineKeyboard(telegramId, 'buy:cancel', visitCardPublished);
 }
 
-export function tariffsInlineKeyboard(telegramId) {
-  return buildPackagesInlineKeyboard(telegramId, 'post:tariffs:back');
+export function tariffsInlineKeyboard(telegramId, visitCardPublished = false) {
+  return buildPackagesInlineKeyboard(telegramId, 'post:tariffs:back', visitCardPublished);
 }
 
 export async function sendTopupMenu(ctx, userId = null) {
@@ -58,7 +66,8 @@ export async function sendTopupMenu(ctx, userId = null) {
   if (userId) {
     trackEvent(userId, EVENTS.TARIFFS_OPENED, { source: 'topup_menu' });
   }
-  await ctx.reply(formatTariffsMessage(telegramId), topupInlineKeyboard(telegramId));
+  const visitCardPublished = userId ? await isVisitCardPublished(userId) : false;
+  await ctx.reply(formatTariffsMessage(telegramId), topupInlineKeyboard(telegramId, visitCardPublished));
 }
 
 function buildPaymentInstructionsMessage(pending) {
@@ -82,10 +91,14 @@ function paymentConfirmationKeyboard(pending, confirmationUrl) {
 
 export async function handleTopupAmount(ctx, userId, rub) {
   const telegramId = ctx.from.id;
+  const visitCardPublished = await isVisitCardPublished(userId);
   const pkg = resolveTopupPackage(rub, telegramId);
 
   if (!pkg) {
-    await ctx.reply('Недоступный пакет. Выберите из предложенных.', topupInlineKeyboard(telegramId));
+    await ctx.reply(
+      'Недоступный пакет. Выберите из предложенных.',
+      topupInlineKeyboard(telegramId, visitCardPublished),
+    );
     return;
   }
 
@@ -153,12 +166,21 @@ export async function handleCheckPaymentCallback(ctx, userId, paymentCode) {
 
     if (result.ok && !result.alreadyGranted) {
       await ctx.answerCbQuery('Оплата получена!');
-      await ctx.reply(buildPaymentSuccessText(result), postActionsInlineKeyboard());
+      const visitCardPublished =
+        (result.productType ?? result.pending?.product_type) === 'visit_card' ||
+        (await isVisitCardPublished(userId));
+      await ctx.reply(
+        buildPaymentSuccessText(result),
+        postActionsInlineKeyboard({ visitCardPublished }),
+      );
       return;
     }
 
     if (result.ok && result.alreadyGranted) {
-      await ctx.answerCbQuery('Вопросы уже начислены');
+      const productType = result.productType ?? result.pending?.product_type;
+      await ctx.answerCbQuery(
+        productType === 'visit_card' ? 'Визитка уже опубликована' : 'Вопросы уже начислены',
+      );
       return;
     }
 

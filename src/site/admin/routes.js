@@ -6,6 +6,13 @@ import { InsufficientCreditsError } from '../../shared/billing.js';
 import { config } from '../../shared/config.js';
 import * as queries from './queries.js';
 import * as analyticsQueries from './analytics-queries.js';
+import * as visitCardQueries from './visit-card-queries.js';
+import {
+  publishVisitCardByCode,
+  unpublishVisitCard,
+  VisitCardAdminError,
+} from '../../shared/db.js';
+import { buildVisitCardPublicUrl, normalizePersonalityCode } from '../../shared/visit-card.js';
 import { formatPackagesLine } from '../../shared/pricing.js';
 import { formatRequests } from '../../shared/requests-format.js';
 import {
@@ -40,6 +47,13 @@ function flashMessage(query) {
   }
   if (query.ok === 'deleted') {
     return `<div class="flash flash-success">Пользователь удалён.</div>`;
+  }
+  if (query.ok === 'published') {
+    const url = query.code ? buildVisitCardPublicUrl(query.code) : '';
+    return `<div class="flash flash-success">Визитка опубликована${url ? `: <a href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a>` : ''}.</div>`;
+  }
+  if (query.ok === 'unpublished') {
+    return `<div class="flash flash-success">Визитка снята с публикации.</div>`;
   }
   if (query.error) {
     return `<div class="flash flash-error">${esc(query.error)}</div>`;
@@ -154,6 +168,8 @@ export function createAdminRouter() {
           <a href="/admin/payments">Вся история оплат →</a>
           ·
           <a href="/admin/analytics">Воронка и отвалы →</a>
+          ·
+          <a href="/admin/visit-cards">Визитки →</a>
         </p>
       </div>
     `;
@@ -484,6 +500,135 @@ export function createAdminRouter() {
     `;
 
     res.type('html').send(layout('Оплаты', 'payments', body));
+  });
+
+  router.get('/visit-cards', async (req, res) => {
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const search = String(req.query.search || '');
+    const [{ visitCards, total, pages }, publishedTotal] = await Promise.all([
+      visitCardQueries.listPublishedVisitCards({ page, search }),
+      visitCardQueries.countPublishedVisitCards(),
+    ]);
+
+    const rows = visitCards.length
+      ? visitCards
+          .map((card) => {
+            const url = buildVisitCardPublicUrl(card.personality_code);
+            return `<tr>
+          <td><code>${esc(card.personality_code)}</code></td>
+          <td><a href="/admin/users/${card.id}">${esc(userLabel(card))}</a></td>
+          <td>${formatDate(card.visit_card_published_at)}</td>
+          <td>${card.content_length > 0 ? `${esc(card.content_length)} симв.` : '<span class="badge badge-muted">пусто</span>'}</td>
+          <td><a href="${esc(url)}" target="_blank" rel="noopener">Открыть</a></td>
+          <td>
+            <form method="post" action="/admin/visit-cards/${card.id}/unpublish" style="display:inline"
+                  onsubmit="return confirm('Снять визитку ${esc(card.personality_code)} с публикации?');">
+              <button type="submit" class="btn btn-danger btn-sm">Удалить</button>
+            </form>
+          </td>
+        </tr>`;
+          })
+          .join('')
+      : `<tr><td colspan="6" class="empty">Опубликованных визиток пока нет</td></tr>`;
+
+    const prev =
+      page > 1 ? `/admin/visit-cards?page=${page - 1}&search=${encodeURIComponent(search)}` : null;
+    const next =
+      page < pages ? `/admin/visit-cards?page=${page + 1}&search=${encodeURIComponent(search)}` : null;
+
+    const body = `
+      ${flashMessage(req.query)}
+      <h1 class="page-title">Визитки</h1>
+      <p class="page-subtitle">Опубликовано: ${publishedTotal} · данные берутся из профиля пользователя по коду личности</p>
+
+      <div class="card" style="margin-bottom:1rem">
+        <div class="card-header">Опубликовать визитку по коду</div>
+        <div style="padding:1rem">
+          <p class="muted-text" style="margin-bottom:0.75rem">
+            Укажите 10-значный код личности. Если пользователь есть в базе и у него есть разбор —
+            визитка будет создана из его данных (имя и дата рождения на странице не показываются).
+          </p>
+          <form method="post" action="/admin/visit-cards/publish" class="toolbar">
+            <input
+              type="text"
+              name="personality_code"
+              inputmode="numeric"
+              pattern="\\d{10}"
+              maxlength="10"
+              placeholder="1234567890"
+              required
+              style="min-width:180px;font-family:monospace"
+            >
+            <button type="submit" class="btn btn-success">Опубликовать</button>
+          </form>
+        </div>
+      </div>
+
+      <form class="toolbar" method="get" action="/admin/visit-cards">
+        <input type="search" name="search" placeholder="Код, ID, telegram, имя…" value="${esc(search)}" style="min-width:240px">
+        <button type="submit" class="btn">Найти</button>
+        ${search ? `<a href="/admin/visit-cards" class="btn btn-ghost">Сбросить</a>` : ''}
+      </form>
+
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Код</th><th>Пользователь</th><th>Опубликована</th><th>Контент</th><th>Страница</th><th></th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      </div>
+      <div class="pagination">
+        ${prev ? `<a href="${prev}" class="btn btn-ghost btn-sm">← Назад</a>` : ''}
+        <span>Стр. ${page} из ${pages}${search ? ` · найдено: ${total}` : ''}</span>
+        ${next ? `<a href="${next}" class="btn btn-ghost btn-sm">Вперёд →</a>` : ''}
+      </div>
+    `;
+
+    res.type('html').send(layout('Визитки', 'visit-cards', body));
+  });
+
+  router.post('/visit-cards/publish', async (req, res) => {
+    const code = normalizePersonalityCode(req.body.personality_code);
+
+    if (!code) {
+      res.redirect(
+        `/admin/visit-cards?error=${encodeURIComponent('Код личности должен содержать 10 цифр')}`,
+      );
+      return;
+    }
+
+    try {
+      const result = await publishVisitCardByCode(code);
+      res.redirect(
+        `/admin/visit-cards?ok=published&code=${encodeURIComponent(result.personalityCode)}`,
+      );
+    } catch (err) {
+      const message =
+        err instanceof VisitCardAdminError
+          ? err.message
+          : err?.code === 'PERSONALITY_CODE_CONFLICT'
+            ? 'Этот код личности уже закреплён за другим пользователем'
+            : err?.message ?? 'Не удалось опубликовать визитку';
+      res.redirect(`/admin/visit-cards?error=${encodeURIComponent(message)}`);
+    }
+  });
+
+  router.post('/visit-cards/:userId/unpublish', async (req, res) => {
+    const userId = Number(req.params.userId);
+    const card = await visitCardQueries.getVisitCardByUserId(userId);
+
+    if (!card) {
+      res.redirect('/admin/visit-cards?error=' + encodeURIComponent('Визитка не найдена'));
+      return;
+    }
+
+    await unpublishVisitCard(userId);
+    res.redirect('/admin/visit-cards?ok=unpublished');
   });
 
   router.get('/analytics', async (req, res) => {

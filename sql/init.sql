@@ -112,3 +112,46 @@ CREATE INDEX IF NOT EXISTS idx_analytics_events_name_created
 
 CREATE INDEX IF NOT EXISTS idx_analytics_events_step_created
   ON analytics_events (step, created_at DESC);
+
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS personality_code TEXT;
+
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS visit_card_published BOOLEAN NOT NULL DEFAULT FALSE;
+
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS visit_card_published_at TIMESTAMPTZ;
+
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS visit_card_content TEXT;
+
+UPDATE users u
+SET personality_code = u.onboarding_data->>'personality_code'
+WHERE u.personality_code IS NULL
+  AND COALESCE(u.onboarding_data->>'personality_code', '') <> ''
+  AND NOT EXISTS (
+    SELECT 1
+    FROM users u2
+    WHERE u2.id <> u.id
+      AND u2.personality_code = u.onboarding_data->>'personality_code'
+  );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_personality_code_unique
+  ON users (personality_code)
+  WHERE personality_code IS NOT NULL;
+
+ALTER TABLE pending_payments
+  ADD COLUMN IF NOT EXISTS product_type TEXT NOT NULL DEFAULT 'topup';
+
+ALTER TABLE pending_payments
+  DROP CONSTRAINT IF EXISTS pending_payments_credits_amount_check;
+
+ALTER TABLE pending_payments
+  ADD CONSTRAINT pending_payments_credits_amount_check CHECK (credits_amount >= 0);
+
+ALTER TABLE pending_payments
+  DROP CONSTRAINT IF EXISTS pending_payments_product_type_check;
+
+ALTER TABLE pending_payments
+  ADD CONSTRAINT pending_payments_product_type_check
+    CHECK (product_type IN ('topup', 'visit_card'));

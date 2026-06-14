@@ -3,6 +3,7 @@ import pg from 'pg';
 import { config } from './config.js';
 import * as billing from './billing.js';
 import { EVENTS, trackEvent } from './analytics.js';
+import { publishVisitCard } from './db.js';
 
 const { Pool } = pg;
 const pool = new Pool({ connectionString: config.databaseUrl });
@@ -28,10 +29,23 @@ export async function createTopupRequest(userId, rubAmount, requests) {
   const paymentCode = generatePaymentCode();
 
   const { rows } = await pool.query(
-    `INSERT INTO pending_payments (user_id, payment_code, rub_amount, credits_amount, provider)
-     VALUES ($1, $2, $3, $4, 'yookassa')
-     RETURNING id, payment_code, rub_amount, credits_amount, provider, created_at`,
+    `INSERT INTO pending_payments (user_id, payment_code, rub_amount, credits_amount, provider, product_type)
+     VALUES ($1, $2, $3, $4, 'yookassa', 'topup')
+     RETURNING id, payment_code, rub_amount, credits_amount, provider, product_type, created_at`,
     [userId, paymentCode, rubAmount, requests],
+  );
+
+  return rows[0];
+}
+
+export async function createVisitCardPayment(userId, rubAmount) {
+  const paymentCode = generatePaymentCode();
+
+  const { rows } = await pool.query(
+    `INSERT INTO pending_payments (user_id, payment_code, rub_amount, credits_amount, provider, product_type)
+     VALUES ($1, $2, $3, 0, 'yookassa', 'visit_card')
+     RETURNING id, payment_code, rub_amount, credits_amount, provider, product_type, created_at`,
+    [userId, paymentCode, rubAmount],
   );
 
   return rows[0];
@@ -56,6 +70,31 @@ export async function getPendingByCode(paymentCode) {
   return rows[0] ?? null;
 }
 
+async function completeVisitCardPayment(pending, yookassaPaymentId) {
+  const visitCard = await publishVisitCard(pending.user_id);
+
+  await pool.query(
+    `UPDATE pending_payments
+     SET status = 'completed', completed_at = NOW(), external_payment_id = $2
+     WHERE id = $1`,
+    [pending.id, yookassaPaymentId],
+  );
+
+  trackEvent(pending.user_id, EVENTS.VISIT_CARD_PUBLISHED, {
+    rub: pending.rub_amount,
+    payment_code: pending.payment_code,
+    personality_code: visitCard.personalityCode,
+  });
+
+  return {
+    ok: true,
+    pending,
+    productType: 'visit_card',
+    visitCard,
+    alreadyGranted: false,
+  };
+}
+
 export async function completeYookassaPayment(paymentCode, yookassaPaymentId) {
   const pending = await getPendingByCode(paymentCode);
 
@@ -64,11 +103,27 @@ export async function completeYookassaPayment(paymentCode, yookassaPaymentId) {
   }
 
   if (pending.status === 'completed') {
+    if (pending.product_type === 'visit_card') {
+      const profile = await pool.query(
+        `SELECT personality_code FROM users WHERE id = $1`,
+        [pending.user_id],
+      );
+      return {
+        ok: true,
+        reason: 'already_completed',
+        pending,
+        productType: 'visit_card',
+        visitCard: { personalityCode: profile.rows[0]?.personality_code },
+        alreadyGranted: true,
+      };
+    }
+
     const balanceAfter = await billing.getBalance(pending.user_id);
     return {
       ok: true,
       reason: 'already_completed',
       pending,
+      productType: 'topup',
       alreadyGranted: true,
       balanceAfter,
     };
@@ -80,6 +135,10 @@ export async function completeYookassaPayment(paymentCode, yookassaPaymentId) {
 
   if (pending.provider !== 'yookassa') {
     return { ok: false, reason: 'wrong_provider', pending };
+  }
+
+  if (pending.product_type === 'visit_card') {
+    return completeVisitCardPayment(pending, yookassaPaymentId);
   }
 
   const idempotencyKey = `purchase:yookassa:${yookassaPaymentId}`;
@@ -115,6 +174,7 @@ export async function completeYookassaPayment(paymentCode, yookassaPaymentId) {
   return {
     ok: true,
     pending,
+    productType: 'topup',
     balanceAfter: grantResult.balanceAfter,
     alreadyGranted: grantResult.alreadyGranted,
   };

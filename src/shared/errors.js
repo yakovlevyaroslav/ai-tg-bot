@@ -1,6 +1,13 @@
 import { formatQuestions } from './requests-format.js';
 
 export function getUserErrorMessage(err) {
+  if (err?.code === 'PERSONALITY_CODE_CONFLICT') {
+    return (
+      'Такой код личности уже зарегистрирован в системе.\n\n' +
+      'Если вы считаете, что это ошибка — напишите в поддержку.'
+    );
+  }
+
   if (err?.code === 'INSUFFICIENT_CREDITS') {
     return (
       `Недостаточно вопросов.\n` +

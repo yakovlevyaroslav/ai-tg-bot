@@ -40,8 +40,9 @@ export function answerTopicChoiceInlineKeyboard() {
   ]);
 }
 
-export function answerFollowupInlineKeyboard() {
-  return postActionsInlineKeyboard();
+export async function answerFollowupInlineKeyboard(userId) {
+  const visitCardPublished = userId ? await db.isVisitCardPublished(userId) : false;
+  return postActionsInlineKeyboard({ visitCardPublished });
 }
 
 export function allCommandsInlineKeyboard(telegramId) {
@@ -64,5 +65,5 @@ export async function beginContinueTopic(ctx, userId) {
 export async function beginNewTopic(ctx, userId) {
   trackEvent(userId, EVENTS.FOLLOWUP_NEW);
   await db.setOnboardingStep(userId, 'completed');
-  await ctx.reply(ANSWER_FOLLOWUP_TEXT, answerFollowupInlineKeyboard());
+  await ctx.reply(ANSWER_FOLLOWUP_TEXT, await answerFollowupInlineKeyboard(userId));
 }

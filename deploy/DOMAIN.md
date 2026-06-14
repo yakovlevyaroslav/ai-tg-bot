@@ -9,6 +9,7 @@
 | `https://ваш-домен.ru/` | Лендинг |
 | `https://ваш-домен.ru/privacy` | Политика обработки персональных данных |
 | `https://ваш-домен.ru/cookies` | Политика использования cookie |
+| `https://ваш-домен.ru/code/1234567890` | Публичная визитка кода личности (см. [VISIT-CARDS.md](../VISIT-CARDS.md)) |
 | `https://ваш-домен.ru/admin` | Админка (логин/пароль) |
 | `https://ваш-домен.ru/payments/yookassa/webhook` | Webhook ЮKassa |
 

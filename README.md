@@ -6,6 +6,8 @@ Telegram-бот на Node.js с ChatGPT (или mock-режимом), истор
 
 💳 **Оплата и тарифы:** [PAYMENTS.md](./PAYMENTS.md) — ЮKassa, webhook, где менять пакеты и курс.
 
+🪪 **Визитки кода личности:** [VISIT-CARDS.md](./VISIT-CARDS.md) — публикация, URL, хранение, админка.
+
 🚀 **Деплой на VPS:** [DEPLOY.md](./DEPLOY.md) · **Домен + webhook:** [deploy/DOMAIN.md](./deploy/DOMAIN.md) · **HTTP-прокси (Squid):** [deploy/SQUID-PROXY.md](./deploy/SQUID-PROXY.md)
 
 ## Стек
