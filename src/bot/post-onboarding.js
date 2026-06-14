@@ -8,6 +8,7 @@ import {
 } from './keyboards.js';
 import { beginCustomQuestion } from './question-flow-handlers.js';
 import { tariffsInlineKeyboard } from './topup.js';
+import { EVENTS, trackEvent } from '../shared/analytics.js';
 
 export const POPULAR_QUESTIONS = [
   {
@@ -177,8 +178,11 @@ export async function sendPopularTopicMenu(ctx, questionId) {
   );
 }
 
-export async function sendTariffsIntro(ctx) {
+export async function sendTariffsIntro(ctx, userId = null) {
   const telegramId = ctx.from?.id;
+  if (userId) {
+    trackEvent(userId, EVENTS.TARIFFS_OPENED, { source: 'post_onboarding' });
+  }
   await ctx.reply(formatTariffsMessage(telegramId), tariffsInlineKeyboard(telegramId));
 }
 
@@ -221,6 +225,6 @@ export async function handlePostOnboardingCallback(ctx, action, subAction = null
 
   if (action === 'tariffs') {
     await ctx.answerCbQuery();
-    await sendTariffsIntro(ctx);
+    await sendTariffsIntro(ctx, userId);
   }
 }

@@ -15,6 +15,7 @@ import {
 import { scheduleYookassaPaymentPoll } from '../shared/yookassa/poll.js';
 import { notifyPaymentSuccess, buildPaymentSuccessText } from '../site/notify.js';
 import { config } from '../shared/config.js';
+import { EVENTS, trackEvent } from '../shared/analytics.js';
 import { postActionsInlineKeyboard } from './keyboards.js';
 
 function packageButtonLabel(pkg, publicIndex = 0) {
@@ -52,8 +53,11 @@ export function tariffsInlineKeyboard(telegramId) {
   return buildPackagesInlineKeyboard(telegramId, 'post:tariffs:back');
 }
 
-export async function sendTopupMenu(ctx) {
+export async function sendTopupMenu(ctx, userId = null) {
   const telegramId = ctx.from.id;
+  if (userId) {
+    trackEvent(userId, EVENTS.TARIFFS_OPENED, { source: 'topup_menu' });
+  }
   await ctx.reply(formatTariffsMessage(telegramId), topupInlineKeyboard(telegramId));
 }
 
@@ -139,6 +143,7 @@ export async function handleBuyCallback(ctx, userId, rubRaw) {
   }
 
   await ctx.answerCbQuery();
+  trackEvent(userId, EVENTS.PAYMENT_PACKAGE_SELECTED, { rub });
   await handleTopupAmount(ctx, userId, rub);
 }
 

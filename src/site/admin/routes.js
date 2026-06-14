@@ -5,6 +5,7 @@ import * as billing from '../../shared/billing.js';
 import { InsufficientCreditsError } from '../../shared/billing.js';
 import { config } from '../../shared/config.js';
 import * as queries from './queries.js';
+import * as analyticsQueries from './analytics-queries.js';
 import { formatPackagesLine } from '../../shared/pricing.js';
 import { formatRequests } from '../../shared/requests-format.js';
 import {
@@ -48,6 +49,40 @@ function flashMessage(query) {
 
 function isProtectedAdminUser(user) {
   return config.adminTelegramIds.includes(Number(user.telegram_id));
+}
+
+function funnelRows(rows) {
+  if (!rows.length) {
+    return `<tr><td colspan="4" class="empty">Пока нет данных — события появятся после активности пользователей</td></tr>`;
+  }
+
+  return rows
+    .map((row, index) => {
+      const conv =
+        index === 0 ? '—' : `${row.conversion}%`;
+      return `<tr>
+        <td>${esc(row.label)}</td>
+        <td><strong>${esc(row.users)}</strong></td>
+        <td>${esc(conv)}</td>
+        <td><code>${esc(row.event)}${row.step ? ` · ${row.step}` : ''}</code></td>
+      </tr>`;
+    })
+    .join('');
+}
+
+function periodLinks(currentDays) {
+  const options = [
+    { days: 7, label: '7 дней' },
+    { days: 30, label: '30 дней' },
+    { days: 0, label: 'Всё время' },
+  ];
+
+  return options
+    .map(({ days, label }) => {
+      const active = currentDays === days ? ' btn' : ' btn btn-ghost';
+      return `<a href="/admin/analytics?days=${days}" class="${active.trim()}">${label}</a>`;
+    })
+    .join(' ');
 }
 
 export function createAdminRouter() {
@@ -115,7 +150,11 @@ export function createAdminRouter() {
             <tbody>${paymentRows}</tbody>
           </table>
         </div>
-        <p style="padding:0.75rem 1rem;margin:0"><a href="/admin/payments">Вся история оплат →</a></p>
+        <p style="padding:0.75rem 1rem;margin:0">
+          <a href="/admin/payments">Вся история оплат →</a>
+          ·
+          <a href="/admin/analytics">Воронка и отвалы →</a>
+        </p>
       </div>
     `;
 
@@ -445,6 +484,107 @@ export function createAdminRouter() {
     `;
 
     res.type('html').send(layout('Оплаты', 'payments', body));
+  });
+
+  router.get('/analytics', async (req, res) => {
+    const daysRaw = Number(req.query.days);
+    const days = daysRaw === 0 ? 0 : [7, 30].includes(daysRaw) ? daysRaw : 30;
+
+    const [summary, onboardingFunnel, paymentFunnel, stuckUsers, recentEvents] =
+      await Promise.all([
+        analyticsQueries.getAnalyticsSummary(days),
+        analyticsQueries.getOnboardingFunnel(days),
+        analyticsQueries.getPaymentFunnel(days),
+        analyticsQueries.getStuckOnboardingUsers({ hours: 24, limit: 20 }),
+        analyticsQueries.getRecentAnalyticsEvents(25),
+      ]);
+
+    const stuckRows = stuckUsers.length
+      ? stuckUsers
+          .map(
+            (u) => `<tr>
+          <td><a href="/admin/users/${u.id}">#${u.id}</a></td>
+          <td>${esc(userLabel(u))}</td>
+          <td><code>${esc(u.onboarding_step)}</code></td>
+          <td>${formatDate(u.last_activity)}</td>
+        </tr>`,
+          )
+          .join('')
+      : `<tr><td colspan="4" class="empty">Застрявших пользователей нет</td></tr>`;
+
+    const recentRows = recentEvents.length
+      ? recentEvents
+          .map(
+            (e) => `<tr>
+          <td>${formatDate(e.created_at)}</td>
+          <td><a href="/admin/users/${e.user_id}">${esc(userLabel(e))}</a></td>
+          <td><code>${esc(e.event_name)}</code></td>
+          <td>${esc(e.step || '—')}</td>
+        </tr>`,
+          )
+          .join('')
+      : `<tr><td colspan="4" class="empty">Событий пока нет</td></tr>`;
+
+    const periodLabel = days === 0 ? 'за всё время' : `за ${days} дн.`;
+
+    const body = `
+      <h1 class="page-title">Воронка</h1>
+      <p class="page-subtitle">
+        ${esc(periodLabel)} · событий: ${esc(summary.events_total)} · активных пользователей: ${esc(summary.active_users)}
+        · админы исключены из статистики
+      </p>
+      <div class="toolbar">${periodLinks(days)}</div>
+
+      <div class="card" style="margin-bottom:1rem">
+        <div class="card-header">Анкета и первый вопрос</div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Шаг</th><th>Пользователей</th><th>Конверсия</th><th>Событие</th></tr>
+            </thead>
+            <tbody>${funnelRows(onboardingFunnel)}</tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:1rem">
+        <div class="card-header">Оплата</div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Шаг</th><th>Пользователей</th><th>Конверсия</th><th>Событие</th></tr>
+            </thead>
+            <tbody>${funnelRows(paymentFunnel)}</tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:1rem">
+        <div class="card-header">Застряли в анкете (&gt; 24 ч без активности)</div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>ID</th><th>Пользователь</th><th>Шаг</th><th>Последняя активность</th></tr>
+            </thead>
+            <tbody>${stuckRows}</tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">Последние события</div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Дата</th><th>Пользователь</th><th>Событие</th><th>Шаг</th></tr>
+            </thead>
+            <tbody>${recentRows}</tbody>
+          </table>
+        </div>
+      </div>
+    `;
+
+    res.type('html').send(layout('Воронка', 'analytics', body));
   });
 
   router.use((req, res) => {

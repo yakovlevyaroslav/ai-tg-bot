@@ -15,6 +15,7 @@ import {
 import { getUserErrorMessage } from '../shared/errors.js';
 import { buildWelcomeText, WELCOME_MESSAGE_PARSE_MODE } from '../shared/welcome-message.js';
 import { replyFormatted } from '../shared/telegram-format.js';
+import { EVENTS, trackEvent } from '../shared/analytics.js';
 
 const MESSAGES = {
   askName:
@@ -202,12 +203,16 @@ async function runCalculationLoading(ctx, userId) {
       personality_code_result: result.content,
     });
     await db.setOnboardingCompleted(userId, true);
+    trackEvent(userId, EVENTS.PERSONALITY_CODE_GENERATED, { model: result.model });
     await sendPostOnboardingOffer(ctx);
   } catch (err) {
     typingActive = false;
     await typingLoop;
     console.error('Personality code error:', err?.message ?? err);
     await db.setOnboardingStep(userId, 'calculation_failed');
+    trackEvent(userId, EVENTS.PERSONALITY_CODE_FAILED, {
+      code: err?.code ?? err?.message ?? 'unknown',
+    });
     await ctx.reply(getUserErrorMessage(err) || MESSAGES.calculationError);
   }
 }
@@ -234,6 +239,7 @@ async function saveBirthPlaceAndConfirm(ctx, userId, query) {
 
 /** Запуск анкеты с /start */
 export async function startOnboarding(ctx, userId) {
+  trackEvent(userId, EVENTS.BOT_START);
   await db.resetOnboarding(userId);
   await dismissLegacyReplyKeyboard(ctx);
   await ctx.reply(buildWelcomeText(ctx.from?.id), { parse_mode: WELCOME_MESSAGE_PARSE_MODE });
@@ -372,11 +378,13 @@ export async function handleOnboardingConfirm(ctx, userId, decision) {
 
   if (decision === 'no') {
     await ctx.answerCbQuery('Заполняем заново');
+    trackEvent(userId, EVENTS.ONBOARDING_CONFIRM, { decision: 'no' });
     await startOnboarding(ctx, userId);
     return;
   }
 
   await ctx.answerCbQuery('Начинаем расчёт');
+  trackEvent(userId, EVENTS.ONBOARDING_CONFIRM, { decision: 'yes' });
   await db.setOnboardingStep(userId, 'calculating');
   await runCalculationLoading(ctx, userId);
 }

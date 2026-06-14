@@ -26,6 +26,7 @@ import {
 } from './topup.js';
 import { createAccessGateMiddleware, isBotAccessGateEnabled } from './access-gate.js';
 import { createDismissReplyKeyboardMiddleware } from './dismiss-reply-keyboard.js';
+import { EVENTS, trackEvent } from '../shared/analytics.js';
 import {
   startOnboarding,
   handleOnboardingText,
@@ -108,6 +109,7 @@ async function sendBalance(ctx, userId = null) {
 }
 
 async function sendRestart(ctx, userId) {
+  trackEvent(userId, EVENTS.BOT_RESTART);
   await db.clearHistory(userId);
   await startOnboarding(ctx, userId);
 }
@@ -151,11 +153,17 @@ async function handleChatMessage(ctx, userId, text) {
     chargeResult = await billing.charge(userId, cost, { reason: 'message' });
   } catch (err) {
     if (err.code === 'INSUFFICIENT_CREDITS') {
+      trackEvent(userId, EVENTS.QUESTION_INSUFFICIENT_BALANCE, {
+        balance: err.balance,
+        required: err.required,
+      });
       await ctx.reply(getUserErrorMessage(err), balanceTariffsInlineKeyboard());
       return;
     }
     throw err;
   }
+
+  trackEvent(userId, EVENTS.QUESTION_ASKED);
 
   await ctx.sendChatAction('typing');
 
@@ -186,6 +194,8 @@ async function handleChatMessage(ctx, userId, text) {
       const keyboard = isLast ? answerTopicChoiceInlineKeyboard() : undefined;
       await replyFormatted(ctx, replyText, keyboard);
     }
+
+    trackEvent(userId, EVENTS.QUESTION_ANSWERED, { model: result.model });
   } catch (err) {
     console.error('Chat error:', err?.message ?? err);
     await billing.refund(userId, cost, chargeResult.transactionId, {
@@ -211,7 +221,7 @@ async function handleMenuCommand(ctx, userId, command) {
       if (!isAdmin(ctx.from.id)) {
         return;
       }
-      await sendTopupMenu(ctx);
+      await sendTopupMenu(ctx, userId);
       return;
     case 'restart':
       await sendRestart(ctx, userId);
@@ -426,8 +436,8 @@ export function createBot() {
   });
 
   bot.action(/^post:tariffs$/, async (ctx) => {
-    await registerUser(ctx);
-    await handlePostOnboardingCallback(ctx, 'tariffs');
+    const { userId } = await registerUser(ctx);
+    await handlePostOnboardingCallback(ctx, 'tariffs', null, userId);
   });
 
   bot.action('post:tariffs:back', async (ctx) => {

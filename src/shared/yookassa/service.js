@@ -2,6 +2,7 @@ import { config } from '../config.js';
 import { formatRequests } from '../requests-format.js';
 import * as billing from '../billing.js';
 import * as payments from '../payments.js';
+import { EVENTS, trackEvent } from '../analytics.js';
 import { createPayment, getPayment } from './client.js';
 
 export function isYookassaEnabled() {
@@ -21,6 +22,12 @@ export async function startTopupPayment(userId, rubAmount, requests = null) {
   });
 
   await payments.attachExternalPaymentId(pending.id, payment.id);
+
+  trackEvent(userId, EVENTS.PAYMENT_CREATED, {
+    rub: rubAmount,
+    requests: pending.credits_amount,
+    payment_code: pending.payment_code,
+  });
 
   const confirmationUrl = payment.confirmation?.confirmation_url;
   if (!confirmationUrl) {

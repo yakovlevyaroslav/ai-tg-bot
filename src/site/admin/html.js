@@ -32,6 +32,7 @@ export function userLabel(user) {
 export function layout(title, activeNav, body) {
   const nav = [
     { href: '/admin', label: 'Обзор', key: 'dashboard' },
+    { href: '/admin/analytics', label: 'Воронка', key: 'analytics' },
     { href: '/admin/users', label: 'Пользователи', key: 'users' },
     { href: '/admin/payments', label: 'Оплаты', key: 'payments' },
   ];

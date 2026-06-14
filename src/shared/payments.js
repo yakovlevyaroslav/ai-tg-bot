@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import pg from 'pg';
 import { config } from './config.js';
 import * as billing from './billing.js';
+import { EVENTS, trackEvent } from './analytics.js';
 
 const { Pool } = pg;
 const pool = new Pool({ connectionString: config.databaseUrl });
@@ -102,6 +103,14 @@ export async function completeYookassaPayment(paymentCode, yookassaPaymentId) {
      WHERE id = $1`,
     [pending.id, yookassaPaymentId],
   );
+
+  if (!grantResult.alreadyGranted) {
+    trackEvent(pending.user_id, EVENTS.PAYMENT_COMPLETED, {
+      rub: pending.rub_amount,
+      requests: pending.credits_amount,
+      payment_code: pending.payment_code,
+    });
+  }
 
   return {
     ok: true,

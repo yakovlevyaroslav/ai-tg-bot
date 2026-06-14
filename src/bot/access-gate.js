@@ -1,6 +1,7 @@
 import { timingSafeEqual } from 'node:crypto';
 import { config } from '../shared/config.js';
 import * as db from '../shared/db.js';
+import { EVENTS, trackEvent } from '../shared/analytics.js';
 import { isAdmin } from './admin-commands.js';
 
 const LOCKED_MESSAGE =
@@ -41,11 +42,12 @@ export function createAccessGateMiddleware({ onAccessGranted } = {}) {
 
     const text = ctx.message?.text?.trim();
     if (text && passwordsMatch(text, config.botAccessPassword)) {
-      await db.grantBotAccess({
+      const access = await db.grantBotAccess({
         telegramId,
         username: ctx.from.username,
         firstName: ctx.from.first_name,
       });
+      trackEvent(access.id, EVENTS.ACCESS_GRANTED);
       if (onAccessGranted) {
         await onAccessGranted(ctx);
       }

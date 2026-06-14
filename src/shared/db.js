@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { getDatabaseUrl } from './env.js';
+import { trackOnboardingStep } from './analytics.js';
 
 const { Pool } = pg;
 
@@ -135,6 +136,7 @@ export async function setOnboardingStep(userId, step, dataPatch = null) {
        WHERE id = $1`,
       [userId, step, JSON.stringify(dataPatch)],
     );
+    trackOnboardingStep(userId, step);
     return;
   }
 
@@ -142,6 +144,8 @@ export async function setOnboardingStep(userId, step, dataPatch = null) {
     `UPDATE users SET onboarding_step = $2 WHERE id = $1`,
     [userId, step],
   );
+
+  trackOnboardingStep(userId, step);
 }
 
 export async function setOnboardingCompleted(userId, completed = true) {

@@ -1,5 +1,6 @@
 import { Markup } from 'telegraf';
 import * as db from '../shared/db.js';
+import { EVENTS, trackEvent } from '../shared/analytics.js';
 import { getCommandsForUser } from './bot-commands.js';
 import { postActionsInlineKeyboard } from './keyboards.js';
 
@@ -55,11 +56,13 @@ export function allCommandsInlineKeyboard(telegramId) {
 }
 
 export async function beginContinueTopic(ctx, userId) {
+  trackEvent(userId, EVENTS.FOLLOWUP_CONTINUE);
   await db.setOnboardingStep(userId, 'topic_continue');
   await ctx.reply(CONTINUE_TOPIC_TEXT);
 }
 
 export async function beginNewTopic(ctx, userId) {
+  trackEvent(userId, EVENTS.FOLLOWUP_NEW);
   await db.setOnboardingStep(userId, 'completed');
   await ctx.reply(ANSWER_FOLLOWUP_TEXT, answerFollowupInlineKeyboard());
 }

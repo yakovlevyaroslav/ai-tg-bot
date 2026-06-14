@@ -94,3 +94,21 @@ CREATE INDEX IF NOT EXISTS idx_pending_payments_external_id
 
 CREATE INDEX IF NOT EXISTS idx_pending_payments_user_status
   ON pending_payments (user_id, status);
+
+CREATE TABLE IF NOT EXISTS analytics_events (
+  id BIGSERIAL PRIMARY KEY,
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  event_name TEXT NOT NULL,
+  step TEXT,
+  meta JSONB NOT NULL DEFAULT '{}',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_analytics_events_user_created
+  ON analytics_events (user_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_analytics_events_name_created
+  ON analytics_events (event_name, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_analytics_events_step_created
+  ON analytics_events (step, created_at DESC);
