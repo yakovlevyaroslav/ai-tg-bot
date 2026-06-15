@@ -65,6 +65,13 @@ ports:
 
 Позже ограничите доступ firewall и `pg_hba.conf` только IP RU VPS.
 
+Пароль Postgres для Docker — в **корневом** `.env` (не путать с `.env.bot`):
+
+```bash
+echo 'POSTGRES_PASSWORD=ваш_пароль' > .env
+chmod 600 .env
+```
+
 ```bash
 docker compose -f docker-compose.prod.yml up -d
 ```
@@ -78,6 +85,13 @@ cp .env.bot.example .env.bot
 nano .env.bot
 chmod 600 .env.bot
 ```
+
+| Файл | Назначение |
+|------|------------|
+| `.env` | только `POSTGRES_PASSWORD` — читает Docker Compose |
+| `.env.bot` | весь конфиг бота: `DATABASE_URL`, токен, ключи |
+
+В `.env.bot` **обязательно** строка `DATABASE_URL` с **тем же** паролем, что в `.env`:
 
 | Переменная | Значение |
 |------------|----------|

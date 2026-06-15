@@ -10,7 +10,7 @@ import { ensureDatabase } from '../src/shared/ensure-database.js';
 
 const databaseUrl = process.env.DATABASE_URL?.trim();
 if (!databaseUrl) {
-  throw new Error('Missing DATABASE_URL in .env');
+  throw new Error('Missing DATABASE_URL in .env.bot (or the file passed via --env-file)');
 }
 
 await ensureDatabase(databaseUrl);

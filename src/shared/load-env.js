@@ -17,6 +17,9 @@ function detectEnvFile() {
   if (entry.includes('/site/') || entry.includes('\\site\\')) {
     return resolve(projectRoot, '.env.site');
   }
+  if (entry.includes('init-db')) {
+    return resolve(projectRoot, '.env.bot');
+  }
 
   return resolve(projectRoot, '.env');
 }
