@@ -43,6 +43,10 @@ export function scheduleYookassaPaymentPoll({ userId, paymentCode, onSuccess }) 
       const result = await checkYookassaPayment(userId, paymentCode);
 
       if (result.reason === 'already_completed' || (result.ok && result.alreadyGranted)) {
+        // Webhook на RU уже зачислил — бот на NL шлёт «Оплата прошла» (RU не достучится до Telegram).
+        if (onSuccess && result.ok && result.productType === 'topup') {
+          await onSuccess(result, { force: true });
+        }
         stop('already_completed');
         return;
       }
@@ -68,8 +72,7 @@ export function scheduleYookassaPaymentPoll({ userId, paymentCode, onSuccess }) 
     }
   };
 
-  const timer = setInterval(() => {
-    tick();
-  }, intervalMs);
+  void tick();
+  const timer = setInterval(tick, intervalMs);
   timer.unref?.();
 }

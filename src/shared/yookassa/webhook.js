@@ -2,7 +2,8 @@ import { config } from '../config.js';
 import * as payments from '../payments.js';
 import { isYookassaIp } from './ip-check.js';
 
-export function createYookassaWebhookHandler({ notifyUser }) {
+/** Webhook только зачисляет платёж. Уведомление в Telegram — на NL-боте (poll). */
+export function createYookassaWebhookHandler() {
   return async (req, res) => {
     try {
       const clientIp =
@@ -39,10 +40,6 @@ export function createYookassaWebhookHandler({ notifyUser }) {
           (result.alreadyGranted ? ' (already granted)' : '') +
           (result.reason ? ` reason=${result.reason}` : ''),
       );
-
-      if (result.ok && !result.alreadyGranted && notifyUser) {
-        await notifyUser(result);
-      }
 
       res.status(200).send('');
     } catch (err) {

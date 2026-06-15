@@ -3,15 +3,14 @@ import { config } from '../shared/config.js';
 import { ensureDatabase } from '../shared/ensure-database.js';
 import { initDb, closeDb } from '../shared/db.js';
 import { startSiteServer, stopSiteServer } from './server.js';
-import { notifyPaymentSuccess } from './notify.js';
 
-export async function runSite({ setupSignals = true, onPaymentSuccess = notifyPaymentSuccess, skipInit = false } = {}) {
+export async function runSite({ setupSignals = true, skipInit = false } = {}) {
   if (!skipInit) {
     await ensureDatabase(config.databaseUrl);
     await initDb();
   }
 
-  const server = startSiteServer({ onPaymentSuccess });
+  const server = startSiteServer();
 
   if (!server) {
     throw new Error('Site server failed to start');

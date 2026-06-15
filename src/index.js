@@ -5,7 +5,6 @@ import { initDb, closeDb } from './shared/db.js';
 import { runBot } from './bot/index.js';
 import { runSite } from './site/index.js';
 import { stopSiteServer } from './site/server.js';
-import { notifyPaymentSuccess } from './site/notify.js';
 import { formatTelegramStartError } from './bot/launch.js';
 
 /** Локальная разработка: бот + сайт в одном процессе */
@@ -16,7 +15,6 @@ async function main() {
   const { server } = await runSite({
     setupSignals: false,
     skipInit: true,
-    onPaymentSuccess: notifyPaymentSuccess,
   });
 
   let botHandle;

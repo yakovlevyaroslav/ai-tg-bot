@@ -78,6 +78,7 @@ export async function checkYookassaPayment(userId, paymentCode) {
       ok: true,
       reason: 'already_completed',
       pending,
+      productType: pending.product_type ?? 'topup',
       alreadyGranted: true,
       balanceAfter,
     };

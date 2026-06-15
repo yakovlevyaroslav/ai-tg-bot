@@ -68,27 +68,40 @@ Postgres на RU **не нужен**.
 
 ## Шаг 2. Squid (прокси для ЮKassa с NL)
 
+Замените `NL_VPS_IP` на **реальный IP** зарубежного сервера с ботом (например `185.123.45.67`).
+
 ```bash
 apt install -y squid
 
-cat > /etc/squid/squid.conf <<'EOF'
+NL_VPS_IP=89.124.116.123   # ← ваш IP бота
+
+cat > /etc/squid/squid.conf <<EOF
 http_port 3128
-acl localnet src NL_VPS_IP/32
-http_access allow localnet
+acl nl_bot src 89.124.116.123/32
+http_access allow nl_bot
 http_access deny all
 EOF
+
+squid -k parse && systemctl enable squid && systemctl restart squid
 ```
 
-Подставьте реальный `NL_VPS_IP`.
+Если `squid -k parse` или `restart` падает — смотрите причину:
 
 ```bash
-systemctl enable squid
-systemctl restart squid
-ufw allow from NL_VPS_IP to any port 3128 proto tcp
+systemctl status squid.service --no-pager
+journalctl -xeu squid.service --no-pager | tail -30
+```
+
+Частая ошибка: в конфиге осталась строка `NL_VPS_IP` вместо цифр.
+
+```bash
+ufw allow from ${NL_VPS_IP} to any port 3128 proto tcp
 ```
 
 Проверка с NL:
-
+RU_VPS_IP=?
+SHOP=?
+SECRET=?
 ```bash
 curl -x http://RU_VPS_IP:3128 -sS --max-time 15 https://api.yookassa.ru/v3/me -u SHOP:SECRET
 ```
@@ -131,7 +144,38 @@ npm ci --omit=dev
 
 ## Шаг 5. Запуск сайта
 
+Убедитесь, что на RU есть **полный** `.env.site` (не одна строка) и `DATABASE_URL` указывает на NL Postgres.
+
+Сначала проверка вручную (покажет ошибку в терминале):
+
 ```bash
+cd ~/projects/site/ai-tg-bot   # ваш путь
+node --env-file=.env.site src/site/index.js
+```
+
+Если стартует — `Ctrl+C` и systemd:
+
+```bash
+sudo bash deploy/install-systemd.sh --site-only
+```
+
+Проверьте, что unit **с** `--env-file` и **вашим** путём к проекту:
+
+```bash
+systemctl cat ai-tg-site | grep -E 'WorkingDirectory|ExecStart'
+```
+
+Должно быть примерно:
+
+```
+WorkingDirectory=/root/projects/site/ai-tg-bot
+ExecStart=/usr/bin/node --env-file=/root/projects/site/ai-tg-bot/.env.site src/site/index.js
+```
+
+Если в `ExecStart` нет `--env-file` — на сервере старая версия скрипта/юнита. Обновите репозиторий и переустановите:
+
+```bash
+git pull
 sudo bash deploy/install-systemd.sh --site-only
 ```
 
@@ -139,6 +183,25 @@ sudo bash deploy/install-systemd.sh --site-only
 systemctl status ai-tg-site
 curl -s http://127.0.0.1:3080/health
 # {"ok":true}
+```
+
+Если падает — лог:
+
+```bash
+journalctl -u ai-tg-site -n 30 --no-pager
+```
+
+| Ошибка в логе | Решение |
+|---------------|---------|
+| `Missing required env` | заполните `.env.site` (токен, `DATABASE_URL`, ЮKassa, `ADMIN_WEB_PASSWORD`) |
+| `ECONNREFUSED` / `password authentication` | [доступ Postgres с RU](./BOT-NL-VPS.md#шаг-6-доступ-к-postgres-с-ru-vps), пароль в `DATABASE_URL` |
+| `ENOENT` `.env.site` | файл в корне проекта, путь в unit совпадает с `WorkingDirectory` |
+
+На RU **отключите бота**, если `install-systemd` случайно включил `ai-tg-bot`:
+
+```bash
+sudo systemctl stop ai-tg-bot
+sudo systemctl disable ai-tg-bot
 ```
 
 На NL **не** запускайте `ai-tg-site` (или остановите, если был):

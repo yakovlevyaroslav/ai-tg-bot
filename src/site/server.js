@@ -32,7 +32,7 @@ function basicAuth(req, res, next) {
   res.status(401).send('Неверный логин или пароль');
 }
 
-export function startSiteServer({ onPaymentSuccess } = {}) {
+export function startSiteServer() {
   if (!config.webServerEnabled) {
     console.log('Site server disabled');
     return null;
@@ -79,7 +79,7 @@ export function startSiteServer({ onPaymentSuccess } = {}) {
 
   app.post(
     config.yookassaWebhookPath,
-    createYookassaWebhookHandler({ notifyUser: onPaymentSuccess }),
+    createYookassaWebhookHandler(),
   );
 
   if (config.adminWebEnabled) {

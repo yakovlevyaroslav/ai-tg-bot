@@ -169,7 +169,7 @@ export const config = {
   yookassaSkipIpCheck: process.env.YOOKASSA_SKIP_IP_CHECK === 'true',
   /** Фоновая проверка статуса платежа, если webhook не дошёл */
   yookassaPollIntervalMs: Number(process.env.YOOKASSA_POLL_INTERVAL_MS || 15000),
-  yookassaPollMaxAttempts: Number(process.env.YOOKASSA_POLL_MAX_ATTEMPTS || 20),
+  yookassaPollMaxAttempts: Number(process.env.YOOKASSA_POLL_MAX_ATTEMPTS || 40),
   /** HTTP(S)-прокси для запросов к api.yookassa.ru (нужен, если основной сервер не в РФ).
    *  Формат: http://user:pass@host:port или http://host:port. Пусто — без прокси. */
   yookassaProxy: process.env.YOOKASSA_PROXY?.trim() || '',
