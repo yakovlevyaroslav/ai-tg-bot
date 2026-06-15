@@ -1,144 +1,98 @@
-# Деплой на Ubuntu VPS
+# Деплой с нуля
 
-Минимальная инструкция для production: бот + PostgreSQL + PM2 + админка.
-
-**Стек:** Ubuntu, Docker (PostgreSQL 16), Node.js 20, PM2.
+Выберите схему под ваши серверы.
 
 ---
 
-## 1. Установка на сервер
+## Какую схему выбрать
 
-```bash
-ssh root@ВАШ_IP
-apt update && apt upgrade -y
-apt install -y git curl
+| Условие | Инструкция |
+|---------|------------|
+| **Один VPS**: Telegram, OpenAI и ЮKassa работают без прокси | **[SINGLE-VPS.md](./deploy/SINGLE-VPS.md)** |
+| **Два VPS**: сайт из РФ + бот за рубежом, ЮKassa через Squid | Ниже (NL + RU) |
 
-# Docker
-curl -fsSL https://get.docker.com | sh
-
-# Node.js 20
-curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-apt install -y nodejs
-
-# PM2
-npm install -g pm2
-```
+Проверка «подходит ли один сервер» — [SINGLE-VPS.md § шаг 0](./deploy/SINGLE-VPS.md#шаг-0-проверить-сервер-до-аренды-или-сразу-после).
 
 ---
 
-## 2. Проект
+## Схема: два VPS (NL + RU)
 
-```bash
-git clone https://github.com/ВАШ_РЕПО/ai-tg-bot.git
-cd ai-tg-bot
+```
+┌──────────── RU VPS ────────────┐     ┌──────────── NL VPS ────────────┐
+│ nginx → ai-tg-site (:3080)     │     │ ai-tg-bot                      │
+│ Squid (:3128)                  │     │ PostgreSQL (:5432)             │
+│ домен → сюда                   │────►│                                │
+└────────────────────────────────┘     └────────────────────────────────┘
 ```
 
-PostgreSQL (пароль замените на свой):
+| | NL VPS | RU VPS |
+|---|--------|--------|
+| **Инструкция** | [BOT-NL-VPS.md](./deploy/BOT-NL-VPS.md) | [SITE-RU-VPS.md](./deploy/SITE-RU-VPS.md) |
+| **Конфиг** | `.env.bot` | `.env.site` |
+| **systemd** | `ai-tg-bot` | `ai-tg-site`, `squid` |
+
+### Чеклист
+
+| # | Где | Действие |
+|---|-----|----------|
+| 1 | NL | [Бот + Postgres](./deploy/BOT-NL-VPS.md) шаги 1–5 |
+| 2 | RU | [Squid + сайт](./deploy/SITE-RU-VPS.md) шаги 1–5 |
+| 3 | NL | [Postgres для RU](./deploy/BOT-NL-VPS.md#шаг-6-доступ-к-postgres-с-ru-vps) |
+| 4 | RU | [DNS + SSL + webhook](./deploy/SITE-RU-VPS.md) шаги 6–8 |
+| 5 | NL | `YOOKASSA_PROXY` → restart бота |
+
+---
+
+## Схема: один VPS
+
+Всё на одной машине: бот + сайт + Postgres + домен. Без Squid.
+
+**[SINGLE-VPS.md](./deploy/SINGLE-VPS.md)** — полная инструкция.
 
 ```bash
-nano docker-compose.prod.yml   # POSTGRES_PASSWORD
-docker compose -f docker-compose.prod.yml up -d
-```
-
-`.env`:
-
-```bash
-cp .env.bot.example .env.bot
-nano .env.bot
-chmod 600 .env.bot
-```
-
-Минимум в **`.env.bot`** (шаблон — `.env.bot.example`):
-
-```env
-TELEGRAM_BOT_TOKEN=...          # @BotFather → API Token
-DATABASE_URL=postgresql://postgres:ПАРОЛЬ@127.0.0.1:5432/ai_tg_bot
-AI_PROVIDER=openai              # или mock
-OPENAI_API_KEY=sk-...
-ADMIN_TELEGRAM_IDS=ваш_id
-ADMIN_WEB_PASSWORD=надёжный_пароль
-```
-
-Не добавляйте `SYSTEM_PROMPT_FILE` — промпты специалистов в `prompts/specialists/`.
-
-```bash
-npm ci --omit=dev
-npm run db:init
+sudo bash deploy/install-systemd.sh          # оба сервиса
+sudo bash deploy/setup-domain.sh домен.ru admin@домен.ru
+./release.sh
 ```
 
 ---
 
-## 3. Запуск (PM2)
+## Env-файлы
 
-```bash
-pm2 start ecosystem.config.cjs
-pm2 save
-pm2 startup
-```
+| Файл | Где | Шаблон |
+|------|-----|--------|
+| `.env.bot` | VPS с ботом | `.env.bot.example` |
+| `.env.site` | VPS с сайтом | `.env.site.example` |
 
-Два процесса:
-- **ai-tg-bot** — Telegram-бот
-- **ai-tg-site** — лендинг, админка, webhook ЮKassa
+На **одном VPS** — оба файла, один `DATABASE_URL` (`127.0.0.1`), без `YOOKASSA_PROXY`.
 
-Проверка:
+На **двух VPS** — `DATABASE_URL` на RU указывает на `NL_VPS_IP`; на NL — `YOOKASSA_PROXY` → Squid на RU.
 
-```bash
-pm2 status
-pm2 logs ai-tg-bot
-pm2 logs ai-tg-site
-```
-
-В логах: `Bot is running`. В Telegram: `/start`.
+**Совпадают на всех серверах:** `TELEGRAM_BOT_TOKEN`, `YOOKASSA_*`, `TOPUP_PACKAGES`, `PUBLIC_SITE_URL`.
 
 ---
 
-## 4. Админка и сайт
+## Скрипты
 
-**Локально:** http://localhost:3080/admin (SSH-тunnel не нужен на Mac).
+| Скрипт | Когда |
+|--------|-------|
+| `install-systemd.sh` | Один VPS — без флагов; NL — `--bot-only`; RU — `--site-only` |
+| `setup-domain.sh` | VPS с сайтом и доменом |
+| `release.sh` | Обновление кода |
 
-**Production с доменом:** см. [deploy/DOMAIN.md](./deploy/DOMAIN.md) — лендинг, HTTPS, админка и webhook ЮKassa.
+---
 
-**Сайт на отдельном RU VPS (бот остаётся за рубежом):** [deploy/SITE-RU-VPS.md](./deploy/SITE-RU-VPS.md).
-
-**Отдельный HTTP-прокси (Squid на другом VPS):** [deploy/SQUID-PROXY.md](./deploy/SQUID-PROXY.md).
-
-Кратко:
+## Локально
 
 ```bash
-# .env: PUBLIC_SITE_URL, PUBLIC_BOT_USERNAME, ADMIN_WEB_HOST=127.0.0.1
-sudo bash deploy/setup-domain.sh ваш-домен.ru admin@ваш-домен.ru
+docker compose up -d && npm install
+cp .env.example .env && npm run db:init
+npm run dev
 ```
 
 ---
 
-## 5. Обновление
+## См. также
 
-```bash
-cd ~/projects/ai-tg-bot   # ваш путь
-git pull
-npm ci --omit=dev
-npm run db:init
-pm2 restart ai-tg-bot ai-tg-site
-```
-
-После смены `.env` (токен, ключи): только `pm2 restart ai-tg-bot ai-tg-site`.
-
----
-
-## 6. Если что-то не работает
-
-| Проблема | Решение |
-|----------|---------|
-| `ECONNREFUSED :5432` | `docker compose -f docker-compose.prod.yml up -d`, проверьте `DATABASE_URL` |
-| `getMe` 404 | Неверный `TELEGRAM_BOT_TOKEN` |
-| Timeout к Telegram | `curl -s "https://api.telegram.org/bot$TOKEN/getMe"`, затем `git pull` и `pm2 restart` |
-| Админка не открывается | С доменом: `https://домен/admin`. Локально: порт 3080, `ADMIN_WEB_PASSWORD` в `.env` |
-
-Проверка токена:
-
-```bash
-source .env
-curl -s "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getMe"
-```
-
-Ожидается `"ok":true`.
+- [PAYMENTS.md](./PAYMENTS.md) — тарифы
+- [deploy/DBEAVER.md](./deploy/DBEAVER.md) — DBeaver

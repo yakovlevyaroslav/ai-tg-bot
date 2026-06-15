@@ -1,14 +1,13 @@
 #!/usr/bin/env bash
-# Настройка домена на Ubuntu VPS: nginx + Let's Encrypt
+# Nginx + Let's Encrypt для сайта (на VPS с ai-tg-site)
 #
-# Использование (на сервере, от root):
 #   cd ~/projects/ai-tg-bot
 #   sudo bash deploy/setup-domain.sh yourdomain.com admin@yourdomain.com
 #
 # Перед запуском:
-#   1. A-запись DNS: yourdomain.com → IP сервера
-#   2. В .env: ADMIN_WEB_HOST=127.0.0.1, PUBLIC_SITE_URL=https://yourdomain.com
-#   3. pm2 restart ai-tg-bot
+#   1. DNS: yourdomain.com и www → IP этого сервера
+#   2. .env.site: ADMIN_WEB_HOST=127.0.0.1, PUBLIC_SITE_URL=https://yourdomain.com
+#   3. ai-tg-site запущен: curl -s http://127.0.0.1:3080/health
 
 set -euo pipefail
 
@@ -25,6 +24,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 NGINX_CONF="/etc/nginx/sites-available/ai-tg-bot"
 
+echo "==> Checking ai-tg-site health..."
+if ! curl -sf --max-time 5 "http://127.0.0.1:3080/health" >/dev/null; then
+  echo "Warning: http://127.0.0.1:3080/health failed. Start ai-tg-site first." >&2
+fi
+
 echo "==> Installing nginx and certbot..."
 apt-get update -qq
 apt-get install -y nginx certbot python3-certbot-nginx
@@ -40,7 +44,8 @@ nginx -t
 systemctl reload nginx
 
 echo "==> Obtaining SSL certificate..."
-certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "$EMAIL" --redirect
+certbot --nginx -d "$DOMAIN" -d "www.${DOMAIN}" \
+  --non-interactive --agree-tos -m "$EMAIL" --redirect
 
 echo ""
 echo "Done!"
@@ -48,5 +53,4 @@ echo "  Landing:  https://${DOMAIN}/"
 echo "  Admin:    https://${DOMAIN}/admin"
 echo "  Webhook:  https://${DOMAIN}/payments/yookassa/webhook"
 echo ""
-echo "Add webhook URL in YooKassa cabinet (Integrations → HTTP notifications)."
-echo "Event: payment.succeeded"
+echo "Add webhook URL in YooKassa (payment.succeeded)."

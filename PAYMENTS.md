@@ -13,7 +13,7 @@
 
 Логика расчёта — в `src/pricing.js` и `src/config.js`.
 
-Чтобы добавить пакет 400 ₽ на 15 вопросов: `TOPUP_PACKAGES=200:5,300:10,400:15,500:20` и перезапустите бота (`pm2 restart ai-tg-bot ai-tg-site`).
+Чтобы добавить пакет 400 ₽ на 15 вопросов: `TOPUP_PACKAGES=200:5,300:10,400:15,500:20` и перезапустите бота (`systemctl restart ai-tg-bot`).
 
 В ЮKassa вы настраиваете только **подключение магазина** (shop_id, secret key, webhook). Суммы платежей бот передаёт в API автоматически из выбранного пакета.
 
@@ -83,7 +83,7 @@ IP-адреса ЮKassa проверяются автоматически ([сп
 
 ```bash
 npm run db:init
-pm2 restart ai-tg-bot
+systemctl restart ai-tg-bot
 ```
 
 ---

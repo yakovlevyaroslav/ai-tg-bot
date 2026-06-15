@@ -8,7 +8,7 @@ Telegram-бот на Node.js с ChatGPT (или mock-режимом), истор
 
 🪪 **Визитки кода личности:** [VISIT-CARDS.md](./VISIT-CARDS.md) — публикация, URL, хранение, админка.
 
-🚀 **Деплой на VPS:** [DEPLOY.md](./DEPLOY.md) · **Домен + webhook:** [deploy/DOMAIN.md](./deploy/DOMAIN.md) · **HTTP-прокси (Squid):** [deploy/SQUID-PROXY.md](./deploy/SQUID-PROXY.md)
+🚀 **Деплой:** [DEPLOY.md](./DEPLOY.md) · один VPS: [deploy/SINGLE-VPS.md](./deploy/SINGLE-VPS.md) · NL+RU: [deploy/BOT-NL-VPS.md](./deploy/BOT-NL-VPS.md) + [deploy/SITE-RU-VPS.md](./deploy/SITE-RU-VPS.md)
 
 ## Стек
 
@@ -78,8 +78,8 @@ src/
     server.js, landing.js, admin/
   shared/        — общее: БД, биллинг, ЮKassa, config
 sql/init.sql
-deploy/          — nginx, домен, SSL, Squid-прокси
+deploy/          — nginx, systemd, домен, SSL
 ```
 
 **Локально:** `npm run dev` — бот + сайт вместе  
-**Production:** `pm2 start ecosystem.config.cjs` — два процесса
+**Production:** `sudo bash deploy/install-systemd.sh` — см. [DEPLOY.md](./DEPLOY.md)
