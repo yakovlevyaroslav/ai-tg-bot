@@ -3,6 +3,7 @@ module.exports = {
     {
       name: 'ai-tg-bot',
       script: 'src/bot/index.js',
+      node_args: '--env-file=.env.bot',
       cwd: __dirname,
       instances: 1,
       exec_mode: 'fork',
@@ -17,6 +18,7 @@ module.exports = {
     {
       name: 'ai-tg-site',
       script: 'src/site/index.js',
+      node_args: '--env-file=.env.site',
       cwd: __dirname,
       instances: 1,
       exec_mode: 'fork',

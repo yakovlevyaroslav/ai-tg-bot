@@ -1,5 +1,7 @@
 node_modules/
 .env
+.env.bot
+.env.site
 logs/
 prompts/system.txt
 *.log

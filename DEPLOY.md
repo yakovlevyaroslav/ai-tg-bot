@@ -43,12 +43,12 @@ docker compose -f docker-compose.prod.yml up -d
 `.env`:
 
 ```bash
-cp .env.example .env
-nano .env
-chmod 600 .env
+cp .env.bot.example .env.bot
+nano .env.bot
+chmod 600 .env.bot
 ```
 
-Минимум в `.env`:
+Минимум в **`.env.bot`** (шаблон — `.env.bot.example`):
 
 ```env
 TELEGRAM_BOT_TOKEN=...          # @BotFather → API Token
@@ -97,6 +97,8 @@ pm2 logs ai-tg-site
 **Локально:** http://localhost:3080/admin (SSH-тunnel не нужен на Mac).
 
 **Production с доменом:** см. [deploy/DOMAIN.md](./deploy/DOMAIN.md) — лендинг, HTTPS, админка и webhook ЮKassa.
+
+**Сайт на отдельном RU VPS (бот остаётся за рубежом):** [deploy/SITE-RU-VPS.md](./deploy/SITE-RU-VPS.md).
 
 **Отдельный HTTP-прокси (Squid на другом VPS):** [deploy/SQUID-PROXY.md](./deploy/SQUID-PROXY.md).
 

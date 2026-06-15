@@ -1,7 +1,7 @@
 /**
  * Инициализация БД — только DATABASE_URL, без TELEGRAM_BOT_TOKEN.
  */
-import 'dotenv/config';
+import '../src/shared/load-env.js';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';

@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import './load-env.js';
 
 export function getDatabaseUrl() {
   const url = process.env.DATABASE_URL?.trim();

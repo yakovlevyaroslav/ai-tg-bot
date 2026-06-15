@@ -120,7 +120,7 @@ export function renderVisitCardPage(card) {
   const bodyHtml = `
     <style>${visitCardStyles()}</style>
     <p class="badge">Визитка</p>
-    <h1>Код личности</h1>
+    <h1>Твой личный <br> Код личности</h1>
     <p class="lead">Публичная страница с разбором — без имени, даты и места рождения.</p>
     <div class="code-hero">
       <div class="code-label">Код личности</div>

@@ -6,7 +6,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=/root/projects/ai-tg-bot
-ExecStart=/usr/bin/node src/bot/index.js
+ExecStart=/usr/bin/node --env-file=/root/projects/ai-tg-bot/.env.bot src/bot/index.js
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal
