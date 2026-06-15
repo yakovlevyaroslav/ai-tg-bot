@@ -38,19 +38,6 @@ export async function createTopupRequest(userId, rubAmount, requests) {
   return rows[0];
 }
 
-export async function createVisitCardPayment(userId, rubAmount) {
-  const paymentCode = generatePaymentCode();
-
-  const { rows } = await pool.query(
-    `INSERT INTO pending_payments (user_id, payment_code, rub_amount, credits_amount, provider, product_type)
-     VALUES ($1, $2, $3, 0, 'yookassa', 'visit_card')
-     RETURNING id, payment_code, rub_amount, credits_amount, provider, product_type, created_at`,
-    [userId, paymentCode, rubAmount],
-  );
-
-  return rows[0];
-}
-
 export async function attachExternalPaymentId(pendingId, externalPaymentId) {
   await pool.query(
     `UPDATE pending_payments SET external_payment_id = $2 WHERE id = $1`,

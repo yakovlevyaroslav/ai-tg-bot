@@ -5,7 +5,12 @@ import {
   generatePersonalityCode,
   splitPersonalityCodeReply,
 } from './personality-code.js';
-import { dismissLegacyReplyKeyboard, dismissReplyKeyboard } from './keyboards.js';
+import {
+  buildCommandReplyKeyboard,
+  markCommandReplyKeyboardShown,
+  syncCommandReplyKeyboardIfNeeded,
+} from './command-reply-keyboard.js';
+import { syncUserBotCommands } from './bot-commands.js';
 import { sendPostOnboardingOffer } from './post-onboarding.js';
 import {
   generateRandomOnboardingData,
@@ -31,7 +36,7 @@ const MESSAGES = {
   thinking:
     '🧠 Сейчас в раздумьях — свожу Астрологию, Human Design, Нумерологию, Сюцай и Ведическую Астрологию в единый код личности...',
   calculationError:
-    'Не удалось сформировать код личности. Попробуйте ещё раз: нажмите /start и пройдите анкету заново.',
+    'Не удалось сформировать код личности. Попробуйте ещё раз: нажмите /restart и пройдите анкету заново.',
 };
 
 const LOADING_PHRASES = [
@@ -148,7 +153,7 @@ async function askBirthTime(ctx, userId) {
 
 async function askBirthPlace(ctx, userId) {
   await delay();
-  await ctx.reply(MESSAGES.askBirthPlace, dismissReplyKeyboard());
+  await ctx.reply(MESSAGES.askBirthPlace);
   await db.setOnboardingStep(userId, 'await_birth_place');
 }
 
@@ -218,7 +223,10 @@ async function runCalculationLoading(ctx, userId) {
     await db.setOnboardingStep(userId, 'completed');
     await db.setOnboardingCompleted(userId, true);
     trackEvent(userId, EVENTS.PERSONALITY_CODE_GENERATED, { model: result.model });
-    await sendPostOnboardingOffer(ctx, userId);
+    await db.ensureVisitCardPublished(userId);
+    trackEvent(userId, EVENTS.VISIT_CARD_PUBLISHED, { source: 'onboarding' });
+    await syncUserBotCommands(ctx.telegram, ctx.from?.id, userId);
+    await sendPostOnboardingOffer(ctx, userId, { withIntro: true });
   } catch (err) {
     console.error('Personality code error:', err?.message ?? err);
     await db.setOnboardingStep(userId, 'calculation_failed');
@@ -246,21 +254,77 @@ async function saveBirthPlaceAndConfirm(ctx, userId, query) {
     birth_place_lon: null,
   });
 
-  await ctx.reply(`Место рождения: ${place}`, dismissReplyKeyboard());
+  await ctx.reply(`Место рождения: ${place}`);
 
   const updated = await db.getUserProfile(userId);
   await sendSummaryForConfirm(ctx, userId, updated.onboarding_data);
 }
 
-/** Запуск анкеты с /start */
-export async function startOnboarding(ctx, userId) {
-  trackEvent(userId, EVENTS.BOT_START);
-  await db.resetOnboarding(userId);
-  await dismissLegacyReplyKeyboard(ctx);
+async function beginOnboarding(ctx, userId) {
   await ctx.reply(buildWelcomeText(ctx.from?.id), { parse_mode: WELCOME_MESSAGE_PARSE_MODE });
   await delay();
-  await ctx.reply(MESSAGES.askName);
+  await ctx.reply(MESSAGES.askName, buildCommandReplyKeyboard(ctx.from?.id));
+  markCommandReplyKeyboardShown(ctx);
   await db.setOnboardingStep(userId, 'await_name');
+}
+
+async function resumeOnboarding(ctx, userId, profile) {
+  const step = profile.onboarding_step;
+  const telegramId = ctx.from?.id;
+
+  switch (step) {
+    case 'await_name':
+      await ctx.reply(MESSAGES.askName, buildCommandReplyKeyboard(telegramId));
+      markCommandReplyKeyboardShown(ctx);
+      return;
+    case 'await_gender':
+      await ctx.reply('Выберите пол кнопкой ниже 👇', genderKeyboard());
+      return;
+    case 'await_birth_date':
+      await ctx.reply(MESSAGES.askBirthDate);
+      return;
+    case 'await_birth_time':
+      await ctx.reply(MESSAGES.askBirthTime);
+      return;
+    case 'await_birth_place':
+      await ctx.reply(MESSAGES.askBirthPlace);
+      return;
+    case 'await_confirm':
+      await ctx.reply(buildSummaryText(profile.onboarding_data ?? {}), confirmKeyboard());
+      return;
+    case 'calculating':
+      await ctx.reply(LOADING_PHRASES[LOADING_PHRASES.length - 1]);
+      return;
+    case 'calculation_failed':
+      await ctx.reply(MESSAGES.calculationError);
+      return;
+    default:
+      await beginOnboarding(ctx, userId);
+  }
+}
+
+/** /start — без сброса: меню после анкеты или продолжение с текущего шага */
+export async function handleStartCommand(ctx, userId) {
+  trackEvent(userId, EVENTS.BOT_START);
+  const profile = await db.getUserProfile(userId);
+
+  if (profile?.onboarding_completed) {
+    await sendPostOnboardingOffer(ctx, userId);
+    return;
+  }
+
+  if (profile?.onboarding_step) {
+    await resumeOnboarding(ctx, userId, profile);
+    return;
+  }
+
+  await beginOnboarding(ctx, userId);
+}
+
+/** Сброс анкеты и запуск с нуля — /restart и «заполнить сначала» */
+export async function startOnboarding(ctx, userId) {
+  await db.resetOnboarding(userId);
+  await beginOnboarding(ctx, userId);
 }
 
 /** Пропуск анкеты для админа — сразу к финальному этапу */
@@ -276,8 +340,11 @@ export async function skipOnboardingForAdmin(ctx, userId) {
   await db.setOnboardingStep(userId, 'completed');
   await db.setOnboardingCompleted(userId, true);
 
-  await ctx.reply(stubResult, dismissReplyKeyboard());
-  await sendPostOnboardingOffer(ctx, userId);
+  await ctx.reply(stubResult);
+  await db.ensureVisitCardPublished(userId);
+  trackEvent(userId, EVENTS.VISIT_CARD_PUBLISHED, { source: 'admin_skip' });
+  await syncUserBotCommands(ctx.telegram, ctx.from?.id, userId);
+  await sendPostOnboardingOffer(ctx, userId, { withIntro: true });
 }
 
 export async function handleOnboardingText(ctx, userId, text, profile) {
@@ -386,12 +453,12 @@ export async function handleOnboardingGender(ctx, userId, gender) {
 export async function handleOnboardingConfirm(ctx, userId, decision) {
   const profile = await db.getUserProfile(userId);
   if (!profile) {
-    await ctx.answerCbQuery('Сначала пройдите анкету — /start');
+    await ctx.answerCbQuery('Сначала пройдите анкету — /restart');
     return;
   }
 
   if (profile.onboarding_step === 'calculating') {
-    await ctx.answerCbQuery('Расчёт уже идёт — подождите или нажмите /start');
+    await ctx.answerCbQuery('Расчёт уже идёт — подождите');
     return;
   }
 

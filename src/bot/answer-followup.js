@@ -2,7 +2,16 @@ import { Markup } from 'telegraf';
 import * as db from '../shared/db.js';
 import { EVENTS, trackEvent } from '../shared/analytics.js';
 import { getCommandsForUser } from './bot-commands.js';
-import { postActionsInlineKeyboard } from './keyboards.js';
+import { buildPostActionsKeyboard } from './menu-url.js';
+
+export const ANSWER_FOLLOWUP_TEXT =
+  'Хотите узнать что-то ещё?\n\n' +
+  'Можете задать свой вопрос, выбрать из популярных — или открыть код личности через «Код личности» 👇';
+
+export const CONTINUE_TOPIC_TEXT =
+  'Напишите уточнение или продолжение вопроса по этой теме — учту предыдущий ответ.';
+
+export const ALL_COMMANDS_TEXT = '🗂️ Все доступные команды:';
 
 const INLINE_BUTTON_MAX = 58;
 
@@ -14,15 +23,6 @@ const COMMAND_ICONS = {
   help: '❓',
   skip_onboarding: '⏭',
 };
-
-export const ANSWER_FOLLOWUP_TEXT =
-  'Хотите узнать что-то ещё?\n\n' +
-  'Можете задать свой вопрос, выбрать из популярных — или открыть всё меню 👇';
-
-export const CONTINUE_TOPIC_TEXT =
-  'Напишите уточнение или продолжение вопроса по этой теме — учту предыдущий ответ.';
-
-export const ALL_COMMANDS_TEXT = '🗂️ Все доступные команды:';
 
 function truncateInlineButton(label) {
   if (label.length <= INLINE_BUTTON_MAX) {
@@ -41,8 +41,7 @@ export function answerTopicChoiceInlineKeyboard() {
 }
 
 export async function answerFollowupInlineKeyboard(userId) {
-  const visitCardPublished = userId ? await db.isVisitCardPublished(userId) : false;
-  return postActionsInlineKeyboard({ visitCardPublished });
+  return buildPostActionsKeyboard(userId);
 }
 
 export function allCommandsInlineKeyboard(telegramId) {

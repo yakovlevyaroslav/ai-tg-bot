@@ -120,6 +120,26 @@ export async function publishVisitCard(userId) {
   return { personalityCode: code };
 }
 
+/** Бесплатная публикация визитки после онбординга (идемпотентно) */
+export async function ensureVisitCardPublished(userId) {
+  const profile = await getUserProfile(userId);
+
+  if (!profile?.onboarding_completed) {
+    return null;
+  }
+
+  const code = profile.personality_code || profile.onboarding_data?.personality_code;
+  if (!code) {
+    return null;
+  }
+
+  if (profile.visit_card_published) {
+    return { personalityCode: code };
+  }
+
+  return publishVisitCard(userId);
+}
+
 export class VisitCardAdminError extends Error {
   constructor(message, code = 'VISIT_CARD_ADMIN_ERROR') {
     super(message);

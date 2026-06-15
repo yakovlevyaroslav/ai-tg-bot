@@ -1,5 +1,9 @@
 import { Markup } from 'telegraf';
-import { config } from '../shared/config.js';
+import {
+  buildOnboardingPageUrl,
+  canOpenAsWebApp,
+  WEB_APP_MENU_TEXT,
+} from '../shared/visit-card.js';
 
 export function dismissReplyKeyboard() {
   return Markup.removeKeyboard();
@@ -13,58 +17,44 @@ export async function dismissLegacyReplyKeyboard(ctx) {
   }
 }
 
-export function postActionsInlineKeyboard({ visitCardPublished = false } = {}) {
-  const rows = [
+export function buildMenuInlineButton(menuUrl = buildOnboardingPageUrl()) {
+  const label = `🗂️ ${WEB_APP_MENU_TEXT}`;
+
+  if (canOpenAsWebApp(menuUrl)) {
+    return Markup.button.webApp(label, menuUrl);
+  }
+
+  return Markup.button.callback(label, 'post:menu:open');
+}
+
+export function postActionsInlineKeyboard({ menuUrl = null } = {}) {
+  const url = menuUrl || buildOnboardingPageUrl();
+
+  return Markup.inlineKeyboard([
     [
       Markup.button.callback('✍️ Свой вопрос', 'post:questions:custom'),
       Markup.button.callback('🔥 Популярные вопросы', 'post:questions:popular'),
     ],
     [
       Markup.button.callback('📋 Тарифы', 'post:tariffs'),
-      Markup.button.callback('🗂️ Меню', 'post:followup:commands'),
+      buildMenuInlineButton(url),
     ],
-  ];
-
-  if (visitCardPublished) {
-    rows.push([Markup.button.callback('🪪 Моя визитка', 'post:tariffs:visit_card')]);
-  }
-
-  return Markup.inlineKeyboard(rows);
+  ]);
 }
 
-export function balanceTariffsInlineKeyboard({ visitCardPublished = false } = {}) {
-  const rows = [[Markup.button.callback('📋 Тарифы', 'post:tariffs')]];
-
-  if (visitCardPublished) {
-    rows.unshift([Markup.button.callback('🪪 Моя визитка', 'post:tariffs:visit_card')]);
-  }
-
-  return Markup.inlineKeyboard(rows);
+export function balanceTariffsInlineKeyboard() {
+  return Markup.inlineKeyboard([
+    [Markup.button.callback('📋 Тарифы', 'post:tariffs')],
+  ]);
 }
 
-export function postOnboardingInlineKeyboard({ visitCardPublished = false } = {}) {
-  const rows = [
+export function postOnboardingInlineKeyboard() {
+  return Markup.inlineKeyboard([
     [
       Markup.button.callback('❓ Вопросы', 'post:questions'),
       Markup.button.callback('📋 Тарифы', 'post:tariffs'),
     ],
-  ];
-
-  if (visitCardPublished) {
-    rows.push([Markup.button.callback('🪪 Моя визитка', 'post:tariffs:visit_card')]);
-  }
-
-  return Markup.inlineKeyboard(rows);
-}
-
-export function visitCardTariffsRow(visitCardPublished) {
-  if (visitCardPublished) {
-    return [Markup.button.callback('🪪 Моя визитка', 'post:tariffs:visit_card')];
-  }
-
-  return [
-    Markup.button.callback(`🪪 Визитка · ${config.visitCardPriceRub} ₽`, 'post:tariffs:visit_card'),
-  ];
+  ]);
 }
 
 export function questionsMenuInlineKeyboard() {

@@ -41,40 +41,6 @@ export async function startTopupPayment(userId, rubAmount, requests = null) {
   };
 }
 
-export async function startVisitCardPayment(userId, rubAmount = null) {
-  const amount = rubAmount ?? config.visitCardPriceRub;
-  const pending = await payments.createVisitCardPayment(userId, amount);
-
-  const payment = await createPayment({
-    amountRub: amount,
-    description: `Визитка Кода Личности — ${amount} ₽`,
-    metadata: {
-      payment_code: pending.payment_code,
-      user_id: String(userId),
-      product_type: 'visit_card',
-    },
-  });
-
-  await payments.attachExternalPaymentId(pending.id, payment.id);
-
-  trackEvent(userId, EVENTS.PAYMENT_CREATED, {
-    rub: amount,
-    payment_code: pending.payment_code,
-    product_type: 'visit_card',
-  });
-
-  const confirmationUrl = payment.confirmation?.confirmation_url;
-  if (!confirmationUrl) {
-    throw new Error('YooKassa did not return confirmation_url');
-  }
-
-  return {
-    pending,
-    confirmationUrl,
-    yookassaPaymentId: payment.id,
-  };
-}
-
 /** Проверка статуса в API — запасной путь, если webhook недоступен (localhost). */
 export async function syncUserYookassaPayments(userId) {
   const pendingList = await payments.getPendingYookassaForUser(userId);

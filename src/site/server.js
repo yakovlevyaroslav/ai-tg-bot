@@ -6,6 +6,7 @@ import { renderLandingPage } from './landing.js';
 import { renderPrivacyPage } from './privacy.js';
 import { renderCookiesPage } from './cookies.js';
 import { renderVisitCardPage, renderVisitCardNotFoundPage } from './visit-card-page.js';
+import { renderOnboardingStubPage } from './onboarding-page.js';
 import { getPublishedVisitCard } from '../shared/db.js';
 
 function basicAuth(req, res, next) {
@@ -56,6 +57,10 @@ export function startSiteServer({ onPaymentSuccess } = {}) {
 
   app.get('/cookies', (_req, res) => {
     res.type('html').send(renderCookiesPage());
+  });
+
+  app.get('/onboarding', (_req, res) => {
+    res.type('html').send(renderOnboardingStubPage());
   });
 
   app.get('/code/:code', async (req, res) => {

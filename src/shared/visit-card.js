@@ -1,5 +1,7 @@
 import { config } from './config.js';
 
+export const WEB_APP_MENU_TEXT = 'Код личности';
+
 export function buildVisitCardPublicUrl(personalityCode) {
   const code = normalizePersonalityCode(personalityCode);
   if (!code) {
@@ -8,6 +10,16 @@ export function buildVisitCardPublicUrl(personalityCode) {
 
   const base = config.publicSiteUrl?.replace(/\/$/, '');
   return base ? `${base}/code/${code}` : `/code/${code}`;
+}
+
+export function buildOnboardingPageUrl() {
+  const base = config.publicSiteUrl?.replace(/\/$/, '');
+  return base ? `${base}/onboarding` : '/onboarding';
+}
+
+/** Web App в Telegram требует HTTPS */
+export function canOpenAsWebApp(url) {
+  return String(url ?? '').startsWith('https://');
 }
 
 export function normalizePersonalityCode(value) {

@@ -25,10 +25,14 @@ import {
   syncYookassaBeforeBalance,
 } from './topup.js';
 import { createAccessGateMiddleware, isBotAccessGateEnabled } from './access-gate.js';
-import { createDismissReplyKeyboardMiddleware } from './dismiss-reply-keyboard.js';
+import {
+  getCommandForReplyLabel,
+  syncCommandReplyKeyboardIfNeeded,
+} from './command-reply-keyboard.js';
 import { EVENTS, trackEvent } from '../shared/analytics.js';
 import {
   startOnboarding,
+  handleStartCommand,
   handleOnboardingText,
   handleOnboardingGender,
   handleOnboardingConfirm,
@@ -36,17 +40,12 @@ import {
   isOnboardingBlocking,
 } from './onboarding.js';
 import {
-  sendVisitCardMenu,
-  handleVisitCardBuy,
-  handleVisitCardBack,
-  handleVisitCardPayBack,
-} from './visit-card.js';
-import {
   handlePostOnboardingCallback,
   sendPopularTopicMenu,
   getPopularSubquestion,
   POST_ONBOARDING_TEXT,
 } from './post-onboarding.js';
+import { handleMenuOpen } from './menu-url.js';
 import {
   startPendingQuestion,
   beginQuestionAddon,
@@ -81,16 +80,21 @@ function shouldOfferTariffs(balance) {
   return balance < config.lowTokensTariffsThreshold;
 }
 
-async function registerUser(ctx) {
+async function registerUser(ctx, { syncKeyboard = true } = {}) {
   const user = await db.upsertUser({
     telegramId: ctx.from.id,
     username: ctx.from.username,
     firstName: ctx.from.first_name,
   });
   const bonus = await billing.grantWelcomeBonus(user.id);
-  await syncUserBotCommands(ctx.telegram, ctx.from.id).catch((err) => {
+  await syncUserBotCommands(ctx.telegram, ctx.from.id, user.id).catch((err) => {
     console.warn('[bot] setMyCommands failed:', err?.message ?? err);
   });
+
+  if (syncKeyboard) {
+    await syncCommandReplyKeyboardIfNeeded(ctx);
+  }
+
   return { userId: user.id, bonus };
 }
 
@@ -111,9 +115,7 @@ async function sendBalance(ctx, userId = null) {
       `✅ Зачислено +${formatQuestions(yookassaSync.pending.credits_amount)} после оплаты\n\n` + text;
   }
 
-  await ctx.reply(text, balanceTariffsInlineKeyboard({
-    visitCardPublished: await db.isVisitCardPublished(id),
-  }));
+  await ctx.reply(text, balanceTariffsInlineKeyboard());
 }
 
 async function sendRestart(ctx, userId) {
@@ -167,9 +169,7 @@ async function handleChatMessage(ctx, userId, text) {
       });
       await ctx.reply(
         getUserErrorMessage(err),
-        balanceTariffsInlineKeyboard({
-          visitCardPublished: await db.isVisitCardPublished(userId),
-        }),
+        balanceTariffsInlineKeyboard(),
       );
       return;
     }
@@ -215,12 +215,9 @@ async function handleChatMessage(ctx, userId, text) {
       reason: 'api_error',
     });
     const balance = await billing.getBalance(userId);
-    const visitCardPublished = await db.isVisitCardPublished(userId);
     await ctx.reply(
       getUserErrorMessage(err) + formatBalanceLine(balance),
-      shouldOfferTariffs(balance)
-        ? balanceTariffsInlineKeyboard({ visitCardPublished })
-        : undefined,
+      shouldOfferTariffs(balance) ? balanceTariffsInlineKeyboard() : undefined,
     );
   }
 }
@@ -228,7 +225,7 @@ async function handleChatMessage(ctx, userId, text) {
 async function handleMenuCommand(ctx, userId, command) {
   switch (command) {
     case 'start':
-      await startOnboarding(ctx, userId);
+      await handleStartCommand(ctx, userId);
       return;
     case 'balance':
       await sendBalance(ctx, userId);
@@ -248,10 +245,10 @@ async function handleMenuCommand(ctx, userId, command) {
       }
       await ctx.reply(
         'Команды бота:\n' +
-          '/start — пройти анкету заново\n' +
+          '/start — главное меню\n' +
           '/balance — баланс вопросов и статистика\n' +
           `/topup — купить вопросы (${formatPackagesInline(ctx.from.id)})\n` +
-          '/restart — сбросить историю диалога\n' +
+          '/restart — пройти анкету заново\n' +
           '/skip_onboarding — пропустить анкету\n\n' +
           '1 вопрос = 1 развёрнутый ответ.',
       );
@@ -283,22 +280,20 @@ export function createBot() {
   bot.use(
     createAccessGateMiddleware({
       onAccessGranted: async (ctx) => {
-        const { userId } = await registerUser(ctx);
+        const { userId } = await registerUser(ctx, { syncKeyboard: false });
         await ctx.reply('✅ Доступ открыт!');
-        await startOnboarding(ctx, userId);
+        await handleStartCommand(ctx, userId);
       },
     }),
   );
-
-  bot.use(createDismissReplyKeyboardMiddleware());
 
   if (isBotAccessGateEnabled()) {
     console.log('[bot] access gate enabled (password required)');
   }
 
   bot.start(async (ctx) => {
-    const { userId } = await registerUser(ctx);
-    await startOnboarding(ctx, userId);
+    const { userId } = await registerUser(ctx, { syncKeyboard: false });
+    await handleStartCommand(ctx, userId);
   });
 
   bot.help(async (ctx) => {
@@ -308,10 +303,10 @@ export function createBot() {
 
     let text =
       'Команды бота:\n' +
-      '/start — пройти анкету заново\n' +
+      '/start — главное меню\n' +
       '/balance — баланс вопросов и статистика\n' +
       `/topup — купить вопросы (${formatPackagesInline(ctx.from.id)})\n` +
-      '/restart — сбросить историю диалога\n' +
+      '/restart — пройти анкету заново\n' +
       '/skip_onboarding — пропустить анкету\n\n' +
       '1 вопрос = 1 развёрнутый ответ.';
 
@@ -467,41 +462,15 @@ export function createBot() {
     await handlePostOnboardingCallback(ctx, 'tariffs', null, userId);
   });
 
+  bot.action('post:menu:open', async (ctx) => {
+    const { userId } = await registerUser(ctx);
+    await handleMenuOpen(ctx, userId);
+  });
+
   bot.action('post:tariffs:back', async (ctx) => {
-    const { userId } = await registerUser(ctx);
+    await registerUser(ctx);
     await ctx.answerCbQuery();
-    const visitCardPublished = await db.isVisitCardPublished(userId);
-    await ctx.reply(
-      POST_ONBOARDING_TEXT,
-      postOnboardingInlineKeyboard({ visitCardPublished }),
-    );
-  });
-
-  bot.action('post:tariffs:visit_card', async (ctx) => {
-    const { userId } = await registerUser(ctx);
-    await ctx.answerCbQuery();
-    await sendVisitCardMenu(ctx, userId);
-  });
-
-  bot.action('post:visit_card', async (ctx) => {
-    const { userId } = await registerUser(ctx);
-    await ctx.answerCbQuery();
-    await sendVisitCardMenu(ctx, userId);
-  });
-
-  bot.action('post:visit_card:buy', async (ctx) => {
-    const { userId } = await registerUser(ctx);
-    await handleVisitCardBuy(ctx, userId);
-  });
-
-  bot.action('post:visit_card:back', async (ctx) => {
-    const { userId } = await registerUser(ctx);
-    await handleVisitCardBack(ctx, userId);
-  });
-
-  bot.action('post:visit_card:pay:back', async (ctx) => {
-    const { userId } = await registerUser(ctx);
-    await handleVisitCardPayBack(ctx, userId);
+    await ctx.reply(POST_ONBOARDING_TEXT, postOnboardingInlineKeyboard());
   });
 
   bot.on('text', async (ctx) => {
@@ -513,13 +482,9 @@ export function createBot() {
     const { userId } = await registerUser(ctx);
     const profile = await db.getUserProfile(userId);
 
-    if (text === '💰 Баланс') {
-      await sendBalance(ctx, userId);
-      return;
-    }
-
-    if (text === '▶️ Старт') {
-      await startOnboarding(ctx, userId);
+    const menuCommand = getCommandForReplyLabel(text);
+    if (menuCommand) {
+      await handleMenuCommand(ctx, userId, menuCommand);
       return;
     }
 
@@ -544,7 +509,7 @@ export function createBot() {
     }
 
     if (!profile?.onboarding_completed) {
-      await ctx.reply('Сначала пройдите анкету — нажмите /start');
+      await ctx.reply('Сначала пройдите анкету — нажмите /start или /restart для начала заново');
       return;
     }
 

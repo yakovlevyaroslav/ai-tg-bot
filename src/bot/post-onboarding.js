@@ -6,6 +6,7 @@ import {
   popularQuestionsInlineKeyboard,
   popularSubquestionsInlineKeyboard,
 } from './keyboards.js';
+import { syncCommandReplyKeyboardIfNeeded } from './command-reply-keyboard.js';
 import { beginCustomQuestion } from './question-flow-handlers.js';
 import { tariffsInlineKeyboard } from './topup.js';
 import { EVENTS, trackEvent } from '../shared/analytics.js';
@@ -101,8 +102,10 @@ export const POPULAR_QUESTIONS = [
   },
 ];
 
+export const POST_ONBOARDING_INTRO_TEXT =
+  'Вот мы и посмотрели самую поверхностную характеристику твоего кода личности. Уже отлично! 💫 Думаю, нам стоит покопаться глубже';
+
 export const POST_ONBOARDING_TEXT =
-  'Вот мы и посмотрели самую поверхностную характеристику твоего кода личности. Уже отлично! 💫 Думаю, нам стоит покопаться глубже\n\n' +
   'Чтобы выбрать вопрос, нажми ниже на кнопку «Вопросы».\n' +
   'В бесплатном тарифе у тебя есть возможность спросить меня 1 раз.\n' +
   'Ещё ты можешь задать свой вопрос, выбрав платный тариф\n\n' +
@@ -150,12 +153,20 @@ export function getPopularSubquestion(parentId, subId) {
   };
 }
 
-export async function sendPostOnboardingOffer(ctx, userId) {
-  const visitCardPublished = userId ? await db.isVisitCardPublished(userId) : false;
-  await ctx.reply(
-    POST_ONBOARDING_TEXT,
-    postOnboardingInlineKeyboard({ visitCardPublished }),
-  );
+export async function sendPostOnboardingOffer(ctx, userId, { withIntro = false } = {}) {
+  if (withIntro) {
+    await ctx.reply(POST_ONBOARDING_INTRO_TEXT);
+  }
+  await ctx.reply(POST_ONBOARDING_TEXT, postOnboardingInlineKeyboard());
+  await syncCommandReplyKeyboardIfNeeded(ctx);
+}
+
+export async function sendTariffsIntro(ctx, userId = null) {
+  const telegramId = ctx.from?.id;
+  if (userId) {
+    trackEvent(userId, EVENTS.TARIFFS_OPENED, { source: 'post_onboarding' });
+  }
+  await ctx.reply(formatTariffsMessage(telegramId), tariffsInlineKeyboard(telegramId));
 }
 
 export async function sendQuestionsMenu(ctx) {
@@ -179,15 +190,6 @@ export async function sendPopularTopicMenu(ctx, questionId) {
   await ctx.reply(
     buildPopularTopicText(question),
     popularSubquestionsInlineKeyboard(question.id, question.subquestions),
-  );
-}
-
-export async function sendTariffsIntro(ctx, userId = null) {
-  const telegramId = ctx.from?.id;
-  const visitCardPublished = userId ? await db.isVisitCardPublished(userId) : false;
-  await ctx.reply(
-    formatTariffsMessage(telegramId),
-    tariffsInlineKeyboard(telegramId, visitCardPublished),
   );
 }
 
@@ -220,11 +222,7 @@ export async function handlePostOnboardingCallback(ctx, action, subAction = null
     }
 
     if (subAction === 'back') {
-      const visitCardPublished = userId ? await db.isVisitCardPublished(userId) : false;
-      await ctx.reply(
-        POST_ONBOARDING_TEXT,
-        postOnboardingInlineKeyboard({ visitCardPublished }),
-      );
+      await ctx.reply(POST_ONBOARDING_TEXT, postOnboardingInlineKeyboard());
       return;
     }
 
