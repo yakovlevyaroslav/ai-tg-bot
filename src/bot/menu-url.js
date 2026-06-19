@@ -3,6 +3,7 @@ import {
   buildOnboardingPageUrl,
   buildVisitCardPublicUrl,
   canOpenAsWebApp,
+  canOpenMenuAsUrl,
 } from '../shared/visit-card.js';
 import { postActionsInlineKeyboard } from './keyboards.js';
 
@@ -37,13 +38,15 @@ export async function handleMenuOpen(ctx, userId) {
   if (profile?.onboarding_completed) {
     await ctx.reply(
       `🪪 Ваша визитка с кодом личности:\n${url}\n\n` +
-        'Откройте кнопку «Код личности» в меню Telegram или перейдите по ссылке.',
+        'Откройте кнопку «Мой код личности» в меню Telegram или перейдите по ссылке.',
     );
     return;
   }
 
   await ctx.reply(
     `Пройдите анкету в боте, чтобы получить код личности и визитку.\n\n` +
-      (canOpenAsWebApp(url) ? `Заглушка: ${url}` : `Страница: ${buildOnboardingPageUrl()}`),
+      (canOpenAsWebApp(url) || canOpenMenuAsUrl(url)
+        ? `Страница: ${url}`
+        : `Страница: ${buildOnboardingPageUrl()}`),
   );
 }

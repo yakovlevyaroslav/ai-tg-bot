@@ -5,6 +5,34 @@ import { resolve } from 'node:path';
 const DEFAULT_SYSTEM_PROMPT =
   'Ты полезный ассистент в Telegram. Отвечай кратко и по делу на русском языке.';
 
+const isLocalDev = process.env.NODE_ENV !== 'production';
+
+/** Базовый URL сайта: в dev по умолчанию http://localhost:PORT */
+function resolvePublicSiteUrl() {
+  const localExplicit = process.env.LOCAL_PUBLIC_SITE_URL?.trim().replace(/\/$/, '') || '';
+  if (localExplicit) {
+    return localExplicit;
+  }
+
+  const explicit = process.env.PUBLIC_SITE_URL?.trim().replace(/\/$/, '') || '';
+
+  if (isLocalDev) {
+    if (explicit && /localhost|127\.0\.0\.1/i.test(explicit)) {
+      return explicit;
+    }
+    const port = Number(process.env.ADMIN_WEB_PORT || 3080);
+    return `http://localhost:${port}`;
+  }
+
+  return explicit;
+}
+
+const resolvedPublicSiteUrl = resolvePublicSiteUrl();
+
+if (isLocalDev && resolvedPublicSiteUrl) {
+  console.log(`[config] local dev site URL: ${resolvedPublicSiteUrl}`);
+}
+
 function loadWelcomeMessageTemplate() {
   const filePath = process.env.WELCOME_MESSAGE_FILE?.trim();
 
@@ -143,7 +171,7 @@ export const config = {
   databaseUrl: required('DATABASE_URL'),
   aiProvider,
   openaiApiKey: process.env.OPENAI_API_KEY,
-  openaiModel: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+  openaiModel: process.env.OPENAI_MODEL || 'gpt-4o',
   openaiBaseUrl: process.env.OPENAI_BASE_URL,
   historyLimit: Number(process.env.HISTORY_LIMIT || 20),
   systemPrompt: loadSystemPrompt(),
@@ -178,7 +206,8 @@ export const config = {
     process.env.PUBLIC_SITE_TAGLINE ||
     'Персональный код личности в Telegram: пять систем знаний в одном разборе и ответы на ваши вопросы.',
   publicBotUsername: (process.env.PUBLIC_BOT_USERNAME || '').replace(/^@/, ''),
-  publicSiteUrl: (process.env.PUBLIC_SITE_URL || '').replace(/\/$/, ''),
+  publicSiteUrl: resolvedPublicSiteUrl,
+  isLocalDev,
   privacyPolicyUrl: (process.env.PRIVACY_POLICY_URL || '').trim(),
   privacyPolicyFile: process.env.PRIVACY_POLICY_FILE?.trim() || '',
   privacyOperatorName:
@@ -216,6 +245,8 @@ export const config = {
   questionThinkingDelayMs: Number(process.env.QUESTION_THINKING_DELAY_MS || 4000),
   /** Пауза перед предложением задать следующий вопрос (мс) */
   postAnswerFollowupDelayMs: Number(process.env.POST_ANSWER_FOLLOWUP_DELAY_MS || 5000),
+  /** Напоминание с темами, если после разбора нет сообщений (мс) */
+  idleNudgeDelayMs: Number(process.env.IDLE_NUDGE_DELAY_MS || 300000),
   /** Порог: при остатке ниже — кнопка «Тарифы» под ответами после списания */
   lowTokensTariffsThreshold: Number(process.env.LOW_TOKENS_TARIFFS_THRESHOLD || 3),
 };

@@ -1,6 +1,6 @@
 import { config } from './config.js';
 
-export const WEB_APP_MENU_TEXT = 'Код личности';
+export const WEB_APP_MENU_TEXT = 'Мой код личности';
 
 export function buildVisitCardPublicUrl(personalityCode) {
   const code = normalizePersonalityCode(personalityCode);
@@ -20,6 +20,12 @@ export function buildOnboardingPageUrl() {
 /** Web App в Telegram требует HTTPS */
 export function canOpenAsWebApp(url) {
   return String(url ?? '').startsWith('https://');
+}
+
+/** Обычная ссылка в кнопке (http или https) — для локальной разработки */
+export function canOpenMenuAsUrl(url) {
+  const value = String(url ?? '');
+  return value.startsWith('https://') || value.startsWith('http://');
 }
 
 export function normalizePersonalityCode(value) {

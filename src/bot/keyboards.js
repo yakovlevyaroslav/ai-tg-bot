@@ -2,6 +2,7 @@ import { Markup } from 'telegraf';
 import {
   buildOnboardingPageUrl,
   canOpenAsWebApp,
+  canOpenMenuAsUrl,
   WEB_APP_MENU_TEXT,
 } from '../shared/visit-card.js';
 
@@ -22,6 +23,10 @@ export function buildMenuInlineButton(menuUrl = buildOnboardingPageUrl()) {
 
   if (canOpenAsWebApp(menuUrl)) {
     return Markup.button.webApp(label, menuUrl);
+  }
+
+  if (canOpenMenuAsUrl(menuUrl)) {
+    return Markup.button.url(label, menuUrl);
   }
 
   return Markup.button.callback(label, 'post:menu:open');
@@ -48,12 +53,14 @@ export function balanceTariffsInlineKeyboard() {
   ]);
 }
 
-export function postOnboardingInlineKeyboard() {
+export function postOnboardingInlineKeyboard(menuUrl = null) {
+  const url = menuUrl || buildOnboardingPageUrl();
   return Markup.inlineKeyboard([
     [
       Markup.button.callback('❓ Вопросы', 'post:questions'),
       Markup.button.callback('📋 Тарифы', 'post:tariffs'),
     ],
+    [buildMenuInlineButton(url)],
   ]);
 }
 

@@ -7,9 +7,9 @@
     "start": "node src/index.js",
     "start:bot": "node --env-file=.env.bot src/bot/index.js",
     "start:site": "node --env-file=.env.site src/site/index.js",
-    "dev": "node --watch src/index.js",
-    "dev:bot": "node --env-file=.env.bot --watch src/bot/index.js",
-    "dev:site": "node --env-file=.env.site --watch src/site/index.js",
+    "dev": "NODE_ENV=development node --env-file=.env --watch src/index.js",
+    "dev:bot": "NODE_ENV=development node --env-file=.env.bot --watch src/bot/index.js",
+    "dev:site": "NODE_ENV=development node --env-file=.env.site --watch src/site/index.js",
     "db:init": "node --env-file=.env.bot scripts/init-db.js"
   },
   "engines": {

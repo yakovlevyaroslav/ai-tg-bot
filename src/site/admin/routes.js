@@ -15,6 +15,8 @@ import {
 import { buildVisitCardPublicUrl, normalizePersonalityCode } from '../../shared/visit-card.js';
 import { formatPackagesLine } from '../../shared/pricing.js';
 import { formatRequests } from '../../shared/requests-format.js';
+import * as exportQueries from './export-queries.js';
+import { buildCsv, csvFilename } from './csv.js';
 import {
   esc,
   formatDate,
@@ -99,6 +101,50 @@ function periodLinks(currentDays) {
     .join(' ');
 }
 
+function exportPeriodOptions(current) {
+  return [
+    { value: 7, label: '7 дней' },
+    { value: 30, label: '30 дней' },
+    { value: 90, label: '90 дней' },
+    { value: 0, label: 'Всё время' },
+  ]
+    .map(({ value, label }) => {
+      const selected = Number(current) === value ? ' selected' : '';
+      return `<option value="${value}"${selected}>${label}</option>`;
+    })
+    .join('');
+}
+
+function exportSelect(name, options, current = '') {
+  return `<select name="${name}" id="${name}" class="export-select">
+    ${options
+      .map(({ value, label }) => {
+        const selected = String(current) === String(value) ? ' selected' : '';
+        return `<option value="${esc(value)}"${selected}>${esc(label)}</option>`;
+      })
+      .join('')}
+  </select>`;
+}
+
+function exportTypeOptions(current) {
+  return Object.entries(exportQueries.EXPORT_TYPES)
+    .map(([value, meta]) => {
+      const selected = current === value ? ' selected' : '';
+      return `<option value="${esc(value)}"${selected}>${esc(meta.label)}</option>`;
+    })
+    .join('');
+}
+
+function buildExportQueryString(query) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (value != null && String(value).trim() !== '') {
+      params.set(key, String(value).trim());
+    }
+  }
+  return params.toString();
+}
+
 export function createAdminRouter() {
   const router = Router();
 
@@ -168,6 +214,8 @@ export function createAdminRouter() {
           <a href="/admin/payments">Вся история оплат →</a>
           ·
           <a href="/admin/analytics">Воронка и отвалы →</a>
+          ·
+          <a href="/admin/export">Выгрузка метрик →</a>
           ·
           <a href="/admin/visit-cards">Визитки →</a>
         </p>
@@ -678,7 +726,7 @@ export function createAdminRouter() {
         ${esc(periodLabel)} · событий: ${esc(summary.events_total)} · активных пользователей: ${esc(summary.active_users)}
         · админы исключены из статистики
       </p>
-      <div class="toolbar">${periodLinks(days)}</div>
+      <div class="toolbar">${periodLinks(days)} · <a href="/admin/export?type=funnel_onboarding&period=${days}" class="btn btn-ghost btn-sm">Скачать воронку CSV</a></div>
 
       <div class="card" style="margin-bottom:1rem">
         <div class="card-header">Анкета и первый вопрос</div>
@@ -730,6 +778,222 @@ export function createAdminRouter() {
     `;
 
     res.type('html').send(layout('Воронка', 'analytics', body));
+  });
+
+  router.get('/export', async (req, res) => {
+    const filters = exportQueries.parseExportFilters(req.query);
+    const [models, eventSteps] = await Promise.all([
+      exportQueries.listDistinctModels(),
+      exportQueries.listDistinctEventSteps(),
+    ]);
+
+    const typeMeta = exportQueries.EXPORT_TYPES[filters.type];
+    const downloadQs = buildExportQueryString(req.query);
+    const eventOptions = [
+      { value: '', label: 'Все события' },
+      ...exportQueries.EVENT_NAME_OPTIONS.map((name) => ({ value: name, label: name })),
+    ];
+    const stepOptions = [
+      { value: '', label: 'Любой шаг' },
+      ...eventSteps.map((step) => ({ value: step, label: step })),
+    ];
+    const modelOptions = [
+      { value: '', label: 'Все модели' },
+      ...models.map((model) => ({ value: model, label: model })),
+    ];
+
+    const body = `
+      <h1 class="page-title">Выгрузка метрик</h1>
+      <p class="page-subtitle">
+        CSV с UTF-8 для Excel · до 50 000 строк · ${esc(typeMeta.description)}
+      </p>
+
+      <div class="card">
+        <div class="card-header">Параметры выгрузки</div>
+        <form class="export-form" method="get" action="/admin/export/download" id="export-form">
+          <div class="export-grid">
+            <label class="export-field export-field-wide">
+              <span>Тип данных</span>
+              <select name="type" id="export-type" class="export-select">${exportTypeOptions(filters.type)}</select>
+            </label>
+
+            <label class="export-field">
+              <span>Период</span>
+              <select name="period" class="export-select">${exportPeriodOptions(filters.days ?? 30)}</select>
+            </label>
+
+            <label class="export-field">
+              <span>Дата с</span>
+              <input type="date" name="date_from" value="${esc(filters.dateFrom ?? '')}">
+            </label>
+
+            <label class="export-field">
+              <span>Дата по</span>
+              <input type="date" name="date_to" value="${esc(filters.dateTo ?? '')}">
+            </label>
+
+            <label class="export-field export-field-check">
+              <input type="checkbox" name="exclude_admins" value="1"${filters.excludeAdmins ? ' checked' : ''}>
+              <span>Исключить ADMIN_TELEGRAM_IDS</span>
+            </label>
+
+            <label class="export-field" data-filter="users visit_cards">
+              <span>Поиск</span>
+              <input type="search" name="search" value="${esc(filters.search)}" placeholder="ID, telegram, имя, код…">
+            </label>
+
+            <label class="export-field" data-filter="users">
+              <span>Анкета завершена</span>
+              ${exportSelect('onboarding', [
+                { value: '', label: 'Все' },
+                { value: 'yes', label: 'Да' },
+                { value: 'no', label: 'Нет' },
+              ], filters.onboarding)}
+            </label>
+
+            <label class="export-field" data-filter="users">
+              <span>Есть код личности</span>
+              ${exportSelect('has_code', [
+                { value: '', label: 'Все' },
+                { value: 'yes', label: 'Да' },
+                { value: 'no', label: 'Нет' },
+              ], filters.hasCode)}
+            </label>
+
+            <label class="export-field" data-filter="users">
+              <span>Визитка опубликована</span>
+              ${exportSelect('visit_card', [
+                { value: '', label: 'Все' },
+                { value: 'yes', label: 'Да' },
+                { value: 'no', label: 'Нет' },
+              ], filters.visitCard)}
+            </label>
+
+            <label class="export-field" data-filter="payments">
+              <span>Статус оплаты</span>
+              ${exportSelect('payment_status', [
+                { value: '', label: 'Все' },
+                { value: 'completed', label: 'Завершена' },
+                { value: 'pending', label: 'Ожидает' },
+                { value: 'cancelled', label: 'Отменена' },
+              ], filters.paymentStatus)}
+            </label>
+
+            <label class="export-field" data-filter="payments">
+              <span>Тип продукта</span>
+              ${exportSelect('product_type', [
+                { value: '', label: 'Все' },
+                { value: 'topup', label: 'Пакет вопросов' },
+                { value: 'visit_card', label: 'Визитка' },
+              ], filters.productType)}
+            </label>
+
+            <label class="export-field" data-filter="payments">
+              <span>Провайдер</span>
+              ${exportSelect('provider', [
+                { value: '', label: 'Все' },
+                { value: 'yookassa', label: 'ЮKassa' },
+                { value: 'manual', label: 'Ручной' },
+              ], filters.provider)}
+            </label>
+
+            <label class="export-field" data-filter="payments">
+              <span>Фильтр по дате</span>
+              ${exportSelect('payment_date', [
+                { value: 'created_at', label: 'Дата создания' },
+                { value: 'completed_at', label: 'Дата завершения' },
+              ], filters.paymentDateField)}
+            </label>
+
+            <label class="export-field" data-filter="events">
+              <span>Событие</span>
+              ${exportSelect('event_name', eventOptions, filters.eventName)}
+            </label>
+
+            <label class="export-field" data-filter="events">
+              <span>Шаг анкеты</span>
+              ${exportSelect('event_step', stepOptions, filters.eventStep)}
+            </label>
+
+            <label class="export-field" data-filter="usage">
+              <span>Модель AI</span>
+              ${exportSelect('model', modelOptions, filters.model)}
+            </label>
+
+            <label class="export-field" data-filter="transactions">
+              <span>Тип транзакции</span>
+              ${exportSelect('tx_type', [
+                { value: '', label: 'Все' },
+                { value: 'bonus', label: 'Бонус' },
+                { value: 'spend', label: 'Списание' },
+                { value: 'refund', label: 'Возврат' },
+                { value: 'grant', label: 'Начисление' },
+                { value: 'purchase', label: 'Покупка' },
+              ], filters.txType)}
+            </label>
+          </div>
+
+          <p class="muted-text export-hint">
+            Если указаны «Дата с/по», они перекрывают пресет периода.
+            Для воронок используйте только пресет периода (7 / 30 / 90 / всё время).
+          </p>
+
+          <div class="export-actions">
+            <button type="submit" class="btn btn-success">Скачать CSV</button>
+            <a href="/admin/export/download?${esc(downloadQs)}" class="btn btn-ghost">Прямая ссылка на файл</a>
+          </div>
+        </form>
+      </div>
+
+      <div class="card">
+        <div class="card-header">Что в каждой выгрузке</div>
+        <div class="export-help">
+          <dl>
+            <dt>Пользователи</dt><dd>регистрация, анкета, код, баланс, сообщения, вопросы, последняя активность</dd>
+            <dt>Оплаты</dt><dd>суммы, статусы, тип продукта, провайдер, код платежа</dd>
+            <dt>События аналитики</dt><dd>сырые события воронки с meta JSON</dd>
+            <dt>Запросы к AI</dt><dd>модель, токены, списанные вопросы</dd>
+            <dt>Транзакции баланса</dt><dd>начисления, списания, покупки</dd>
+            <dt>Визитки</dt><dd>опубликованные коды и даты</dd>
+            <dt>Воронки</dt><dd>конверсия по шагам (как на странице «Воронка»)</dd>
+            <dt>Сводка по дням</dt><dd>регистрации, AI-запросы, оплаты и выручка по календарным дням</dd>
+          </dl>
+        </div>
+      </div>
+
+      <script>
+        (function () {
+          const form = document.getElementById('export-form');
+          const typeSelect = document.getElementById('export-type');
+          const fields = form.querySelectorAll('[data-filter]');
+
+          function syncFilters() {
+            const type = typeSelect.value;
+            fields.forEach((el) => {
+              const types = (el.getAttribute('data-filter') || '').split(/\\s+/);
+              el.hidden = !types.includes(type);
+            });
+          }
+
+          typeSelect.addEventListener('change', syncFilters);
+          syncFilters();
+        })();
+      </script>
+    `;
+
+    res.type('html').send(layout('Выгрузка', 'export', body));
+  });
+
+  router.get('/export/download', async (req, res) => {
+    const filters = exportQueries.parseExportFilters(req.query);
+    const columns = exportQueries.getExportColumns(filters.type);
+    const rows = await exportQueries.runExport(filters);
+    const csv = buildCsv(columns, rows);
+    const filename = csvFilename(filters.type, filters);
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(csv);
   });
 
   router.use((req, res) => {

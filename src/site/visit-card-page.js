@@ -1,6 +1,6 @@
 import { escapeHtml, renderSitePage } from './html.js';
 import { config } from '../shared/config.js';
-import { buildVisitCardCodeBreakdown } from '../shared/visit-card.js';
+import { buildVisitCardCodeBreakdown, buildVisitCardPublicUrl } from '../shared/visit-card.js';
 
 function telegramHtmlToWeb(content) {
   let html = escapeHtml(content);
@@ -91,8 +91,35 @@ function visitCardStyles() {
     }
     .visit-content strong { color: var(--text); }
     .visit-content em { color: #cfc4ff; }
+    .share-row {
+      margin-top: 28px;
+      text-align: center;
+    }
+    .share-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 14px 28px;
+      border: none;
+      border-radius: 12px;
+      background: linear-gradient(135deg, var(--accent), #9b7bff);
+      color: #fff;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity .2s;
+    }
+    .share-btn:hover { opacity: .9; }
+    .share-btn:active { opacity: .8; }
+    .share-status {
+      margin-top: 10px;
+      color: var(--accent2);
+      font-size: .9rem;
+      min-height: 1.2em;
+    }
     .share-note {
-      margin-top: 24px;
+      margin-top: 20px;
       color: var(--muted);
       font-size: .95rem;
       text-align: center;
@@ -100,10 +127,69 @@ function visitCardStyles() {
   `;
 }
 
+function shareScript(shareUrl) {
+  const safeUrl = JSON.stringify(shareUrl);
+  return `
+    <script>
+      (function () {
+        const shareUrl = ${safeUrl};
+        const btn = document.getElementById('share-btn');
+        const status = document.getElementById('share-status');
+
+        function setStatus(text) {
+          if (status) status.textContent = text;
+        }
+
+        async function copyLink() {
+          try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+              await navigator.clipboard.writeText(shareUrl);
+              setStatus('Ссылка скопирована ✓');
+              return;
+            }
+          } catch (_) {}
+
+          const input = document.createElement('textarea');
+          input.value = shareUrl;
+          input.style.position = 'fixed';
+          input.style.opacity = '0';
+          document.body.appendChild(input);
+          input.select();
+          try {
+            document.execCommand('copy');
+            setStatus('Ссылка скопирована ✓');
+          } catch (_) {
+            setStatus('Не удалось скопировать — выделите ссылку вручную');
+          }
+          document.body.removeChild(input);
+        }
+
+        btn?.addEventListener('click', async function () {
+          if (navigator.share) {
+            try {
+              await navigator.share({
+                title: 'Мой код личности',
+                text: 'Посмотри мой код личности',
+                url: shareUrl,
+              });
+              setStatus('Спасибо, что поделились ✓');
+              return;
+            } catch (err) {
+              if (err && err.name === 'AbortError') return;
+            }
+          }
+          await copyLink();
+        });
+      })();
+    </script>
+  `;
+}
+
 export function renderVisitCardPage(card) {
   const code = card.personality_code;
   const breakdown = buildVisitCardCodeBreakdown(card.onboarding_data ?? {});
   const contentHtml = telegramHtmlToWeb(card.visit_card_content ?? '');
+  const shareUrl = buildVisitCardPublicUrl(code);
 
   const breakdownHtml = breakdown
     .map(
@@ -132,15 +218,20 @@ export function renderVisitCardPage(card) {
         : ''
     }
     <div class="visit-content prose">${contentHtml}</div>
+    <div class="share-row">
+      <button type="button" class="share-btn" id="share-btn">🔗 Поделиться визиткой</button>
+      <div class="share-status" id="share-status"></div>
+    </div>
     <p class="share-note">
       Хотите свой код? Пройдите анкету в ${escapeHtml(botLabel)}.
       ${botLink ? `<a href="${escapeHtml(botLink)}">Открыть бота</a>` : ''}
     </p>
+    ${shareScript(shareUrl)}
   `;
 
   return renderSitePage({
     title: `Код ${code}`,
-    description: `Код личности ${code} — разбор по астрологии, Human Design, нумерологии, Сюцаю и Джойтиш.`,
+    description: `Код личности ${code} — разбор по Астрологии, Human Design, Нумерологии, Сюцаю и Джойтиш.`,
     activeNav: '',
     bodyHtml,
   });

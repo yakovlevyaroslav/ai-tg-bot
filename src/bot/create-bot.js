@@ -45,7 +45,7 @@ import {
   getPopularSubquestion,
   POST_ONBOARDING_TEXT,
 } from './post-onboarding.js';
-import { handleMenuOpen } from './menu-url.js';
+import { handleMenuOpen, resolveUserMenuUrl } from './menu-url.js';
 import {
   startPendingQuestion,
   beginQuestionAddon,
@@ -54,6 +54,7 @@ import {
   finalizePendingQuestion,
   handleQuestionConfirmReminder,
 } from './question-flow-handlers.js';
+import { cancelIdleNudge, getIdleNudgeTopicById } from './idle-nudge.js';
 import { sendQuestionThinkingPrelude } from './question-flow.js';
 import {
   ANSWER_FOLLOWUP_TEXT,
@@ -86,13 +87,14 @@ async function registerUser(ctx, { syncKeyboard = true } = {}) {
     username: ctx.from.username,
     firstName: ctx.from.first_name,
   });
+  cancelIdleNudge(user.id);
   const bonus = await billing.grantWelcomeBonus(user.id);
   await syncUserBotCommands(ctx.telegram, ctx.from.id, user.id).catch((err) => {
     console.warn('[bot] setMyCommands failed:', err?.message ?? err);
   });
 
   if (syncKeyboard) {
-    await syncCommandReplyKeyboardIfNeeded(ctx);
+    await syncCommandReplyKeyboardIfNeeded(ctx, user.id);
   }
 
   return { userId: user.id, bonus };
@@ -401,6 +403,27 @@ export function createBot() {
     await handleOnboardingConfirm(ctx, userId, ctx.match[1]);
   });
 
+  bot.action(/^post:idle:(\d+)$/, async (ctx) => {
+    const { userId } = await registerUser(ctx);
+    const topic = getIdleNudgeTopicById(ctx.match[1]);
+
+    if (!topic) {
+      await ctx.answerCbQuery('Тема не найдена');
+      return;
+    }
+
+    const profile = await db.getUserProfile(userId);
+    if (!profile?.onboarding_completed) {
+      await ctx.answerCbQuery('Сначала пройдите анкету');
+      return;
+    }
+
+    trackEvent(userId, EVENTS.IDLE_NUDGE_TOPIC, { topic_id: topic.id });
+    await ctx.answerCbQuery('Слушаю код…');
+    await sendQuestionThinkingPrelude(ctx);
+    await handleChatMessage(ctx, userId, topic.prompt);
+  });
+
   bot.action(/^post:questions(?::([\w]+))?$/, async (ctx) => {
     const { userId } = await registerUser(ctx);
     await handlePostOnboardingCallback(ctx, 'questions', ctx.match[1] ?? null, userId);
@@ -468,9 +491,10 @@ export function createBot() {
   });
 
   bot.action('post:tariffs:back', async (ctx) => {
-    await registerUser(ctx);
+    const { userId } = await registerUser(ctx);
     await ctx.answerCbQuery();
-    await ctx.reply(POST_ONBOARDING_TEXT, postOnboardingInlineKeyboard());
+    const menuUrl = await resolveUserMenuUrl(userId);
+    await ctx.reply(POST_ONBOARDING_TEXT, postOnboardingInlineKeyboard(menuUrl));
   });
 
   bot.on('text', async (ctx) => {
@@ -513,15 +537,7 @@ export function createBot() {
       return;
     }
 
-    if (profile?.onboarding_step === 'custom_question') {
-      await startPendingQuestion(ctx, userId, text);
-      return;
-    }
-
-    if (profile?.onboarding_completed) {
-      await handleChatMessage(ctx, userId, text);
-      return;
-    }
+    await startPendingQuestion(ctx, userId, text);
   });
 
   return bot;

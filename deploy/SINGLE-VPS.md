@@ -217,7 +217,7 @@ https://ваш-домен.ru/payments/yookassa/webhook
 
 - [ ] `/start` в Telegram
 - [ ] Сайт и админка по HTTPS
-- [ ] WebApp «Код личности», визитка `/code/...`
+- [ ] WebApp «Мой код личности», визитка `/code/...`
 - [ ] Тестовая оплата → webhook → зачисление в боте
 
 ---

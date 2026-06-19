@@ -7,6 +7,8 @@ import {
   popularSubquestionsInlineKeyboard,
 } from './keyboards.js';
 import { syncCommandReplyKeyboardIfNeeded } from './command-reply-keyboard.js';
+import { resolveUserMenuUrl } from './menu-url.js';
+import { scheduleIdleNudge } from './idle-nudge.js';
 import { beginCustomQuestion } from './question-flow-handlers.js';
 import { tariffsInlineKeyboard } from './topup.js';
 import { EVENTS, trackEvent } from '../shared/analytics.js';
@@ -107,6 +109,7 @@ export const POST_ONBOARDING_INTRO_TEXT =
 
 export const POST_ONBOARDING_TEXT =
   'Чтобы выбрать вопрос, нажми ниже на кнопку «Вопросы».\n' +
+  'Свой код личности можно открыть кнопкой «Мой код личности».\n' +
   'В бесплатном тарифе у тебя есть возможность спросить меня 1 раз.\n' +
   'Ещё ты можешь задать свой вопрос, выбрав платный тариф\n\n' +
   'Готов помочь найти ответы 🙏';
@@ -154,11 +157,21 @@ export function getPopularSubquestion(parentId, subId) {
 }
 
 export async function sendPostOnboardingOffer(ctx, userId, { withIntro = false } = {}) {
+  const menuUrl = await resolveUserMenuUrl(userId);
   if (withIntro) {
     await ctx.reply(POST_ONBOARDING_INTRO_TEXT);
   }
-  await ctx.reply(POST_ONBOARDING_TEXT, postOnboardingInlineKeyboard());
-  await syncCommandReplyKeyboardIfNeeded(ctx);
+  await ctx.reply(POST_ONBOARDING_TEXT, postOnboardingInlineKeyboard(menuUrl));
+  await syncCommandReplyKeyboardIfNeeded(ctx, userId);
+
+  const chatId = ctx.chat?.id;
+  if (chatId != null) {
+    scheduleIdleNudge({
+      telegram: ctx.telegram,
+      chatId,
+      userId,
+    });
+  }
 }
 
 export async function sendTariffsIntro(ctx, userId = null) {
@@ -222,7 +235,8 @@ export async function handlePostOnboardingCallback(ctx, action, subAction = null
     }
 
     if (subAction === 'back') {
-      await ctx.reply(POST_ONBOARDING_TEXT, postOnboardingInlineKeyboard());
+      const menuUrl = userId ? await resolveUserMenuUrl(userId) : null;
+      await ctx.reply(POST_ONBOARDING_TEXT, postOnboardingInlineKeyboard(menuUrl));
       return;
     }
 

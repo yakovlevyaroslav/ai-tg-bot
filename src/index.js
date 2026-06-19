@@ -38,7 +38,7 @@ async function main() {
     botHandle = await runBot({ setupSignals: false, skipInit: true });
   } catch (err) {
     console.error('Telegram bot failed to start:', formatTelegramStartError(err));
-    console.log('Site is still available at http://localhost:3080/');
+    console.log(`Site is still available at ${config.publicSiteUrl || 'http://localhost:3080'}/`);
   }
 }
 

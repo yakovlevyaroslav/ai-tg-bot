@@ -33,6 +33,7 @@ export function layout(title, activeNav, body) {
   const nav = [
     { href: '/admin', label: 'Обзор', key: 'dashboard' },
     { href: '/admin/analytics', label: 'Воронка', key: 'analytics' },
+    { href: '/admin/export', label: 'Выгрузка', key: 'export' },
     { href: '/admin/users', label: 'Пользователи', key: 'users' },
     { href: '/admin/payments', label: 'Оплаты', key: 'payments' },
     { href: '/admin/visit-cards', label: 'Визитки', key: 'visit-cards' },

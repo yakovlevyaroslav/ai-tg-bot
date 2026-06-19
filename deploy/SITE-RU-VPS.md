@@ -68,42 +68,50 @@ Postgres на RU **не нужен**.
 
 ## Шаг 2. Squid (прокси для ЮKassa с NL)
 
-Замените `NL_VPS_IP` на **реальный IP** зарубежного сервера с ботом (например `185.123.45.67`).
+IP бота (NL): узнайте на NL-сервере `curl -4 ifconfig.me` (у вас: `89.124.116.123`).
 
 ```bash
 apt install -y squid
 
-NL_VPS_IP=89.124.116.123   # ← ваш IP бота
+NL_VPS_IP=89.124.116.123   # ← замените на IP вашего NL VPS
 
 cat > /etc/squid/squid.conf <<EOF
 http_port 3128
-acl nl_bot src 89.124.116.123/32
-http_access allow nl_bot
+
+acl nl_bot src ${NL_VPS_IP}/32
+acl SSL_ports port 443
+acl CONNECT method CONNECT
+
+http_access allow CONNECT SSL_ports nl_bot
 http_access deny all
+
+visible_hostname personality-proxy
 EOF
 
-squid -k parse && systemctl enable squid && systemctl restart squid
+squid -k parse
+systemctl enable squid
+systemctl restart squid
+ss -tlnp | grep 3128
 ```
 
-Если `squid -k parse` или `restart` падает — смотрите причину:
+Если `squid -k parse` падает — смотрите строку с ERROR:
 
 ```bash
-systemctl status squid.service --no-pager
-journalctl -xeu squid.service --no-pager | tail -30
+squid -k parse 2>&1 | tail -20
+cat -n /etc/squid/squid.conf
+journalctl -u squid -n 20 --no-pager
 ```
 
-Частая ошибка: в конфиге осталась строка `NL_VPS_IP` вместо цифр.
+Частые ошибки: в `acl` осталось `NL_VPS_IP` вместо цифр; старый битый конфиг — перезапишите целиком как выше.
 
 ```bash
 ufw allow from ${NL_VPS_IP} to any port 3128 proto tcp
 ```
 
-Проверка с NL:
-RU_VPS_IP=?
-SHOP=?
-SECRET=?
+Проверка с **NL**:
+
 ```bash
-curl -x http://RU_VPS_IP:3128 -sS --max-time 15 https://api.yookassa.ru/v3/me -u SHOP:SECRET
+curl -v --max-time 5 -x http://RU_VPS_IP:3128 https://api.yookassa.ru/v3/me
 ```
 
 ---

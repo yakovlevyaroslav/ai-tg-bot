@@ -21,6 +21,8 @@ export const EVENTS = {
   VISIT_CARD_PUBLISHED: 'visit_card.published',
   FOLLOWUP_CONTINUE: 'followup.continue',
   FOLLOWUP_NEW: 'followup.new',
+  IDLE_NUDGE_SENT: 'idle_nudge.sent',
+  IDLE_NUDGE_TOPIC: 'idle_nudge.topic',
 };
 
 /** Fire-and-forget: не блокирует бота при ошибке записи */
