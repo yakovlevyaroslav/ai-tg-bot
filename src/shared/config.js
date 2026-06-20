@@ -7,7 +7,7 @@ const DEFAULT_SYSTEM_PROMPT =
 
 const isLocalDev = process.env.NODE_ENV !== 'production';
 
-/** Базовый URL сайта: в dev по умолчанию http://localhost:PORT */
+/** Базовый URL сайта. LOCAL_PUBLIC_SITE_URL — только для локальной отладки сайта на localhost. */
 function resolvePublicSiteUrl() {
   const localExplicit = process.env.LOCAL_PUBLIC_SITE_URL?.trim().replace(/\/$/, '') || '';
   if (localExplicit) {
@@ -16,10 +16,7 @@ function resolvePublicSiteUrl() {
 
   const explicit = process.env.PUBLIC_SITE_URL?.trim().replace(/\/$/, '') || '';
 
-  if (isLocalDev) {
-    if (explicit && /localhost|127\.0\.0\.1/i.test(explicit)) {
-      return explicit;
-    }
+  if (isLocalDev && !explicit) {
     const port = Number(process.env.ADMIN_WEB_PORT || 3080);
     return `http://localhost:${port}`;
   }
@@ -227,8 +224,6 @@ export const config = {
   })(),
   adminWebHost: process.env.ADMIN_WEB_HOST || '127.0.0.1',
   adminTelegramIds: parseAdminIds(process.env.ADMIN_TELEGRAM_IDS),
-  /** Если задан — бот доступен только после ввода пароля (админы проходят без пароля) */
-  botAccessPassword: process.env.BOT_ACCESS_PASSWORD?.trim() || '',
   adminWebPort: Number(process.env.ADMIN_WEB_PORT || 3080),
   adminWebUser: process.env.ADMIN_WEB_USER || 'admin',
   adminWebPassword: process.env.ADMIN_WEB_PASSWORD || '',
@@ -249,6 +244,11 @@ export const config = {
   idleNudgeDelayMs: Number(process.env.IDLE_NUDGE_DELAY_MS || 300000),
   /** Порог: при остатке ниже — кнопка «Тарифы» под ответами после списания */
   lowTokensTariffsThreshold: Number(process.env.LOW_TOKENS_TARIFFS_THRESHOLD || 3),
+  /** Рассылка: интервал воркера, размер пачки, пауза между сообщениями (мс) */
+  broadcastWorkerIntervalMs: Number(process.env.BROADCAST_WORKER_INTERVAL_MS || 3000),
+  broadcastBatchSize: Number(process.env.BROADCAST_BATCH_SIZE || 20),
+  broadcastSendDelayMs: Number(process.env.BROADCAST_SEND_DELAY_MS || 60),
+  broadcastMaxRecipients: Number(process.env.BROADCAST_MAX_RECIPIENTS || 10000),
 };
 
 if (config.aiProvider === 'openai' && !config.openaiApiKey) {

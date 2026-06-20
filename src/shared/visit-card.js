@@ -17,13 +17,33 @@ export function buildOnboardingPageUrl() {
   return base ? `${base}/onboarding` : '/onboarding';
 }
 
+/** Deep link в бота: https://t.me/Bot?start=questions */
+export function buildBotStartLink(startParam = '') {
+  const base = config.publicBotLink?.replace(/\/$/, '');
+  if (!base || base === 'https://t.me') {
+    return '';
+  }
+  const param = String(startParam ?? '').trim();
+  if (!param) {
+    return base;
+  }
+  return `${base}?start=${encodeURIComponent(param)}`;
+}
+
+export const BOT_START_QUESTIONS = 'questions';
+
 /** Web App в Telegram требует HTTPS */
 export function canOpenAsWebApp(url) {
   return String(url ?? '').startsWith('https://');
 }
 
-/** Обычная ссылка в кнопке (http или https) — для локальной разработки */
+/** URL-кнопки inline/reply-клавиатуры — только HTTPS (http://localhost Telegram отклоняет) */
 export function canOpenMenuAsUrl(url) {
+  return String(url ?? '').startsWith('https://');
+}
+
+/** Ссылку можно показать текстом в сообщении (http или https) */
+export function isBrowsableUrl(url) {
   const value = String(url ?? '');
   return value.startsWith('https://') || value.startsWith('http://');
 }

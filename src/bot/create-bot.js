@@ -24,7 +24,6 @@ import {
   handleCheckPaymentCallback,
   syncYookassaBeforeBalance,
 } from './topup.js';
-import { createAccessGateMiddleware, isBotAccessGateEnabled } from './access-gate.js';
 import {
   getCommandForReplyLabel,
   syncCommandReplyKeyboardIfNeeded,
@@ -43,6 +42,7 @@ import {
   handlePostOnboardingCallback,
   sendPopularTopicMenu,
   getPopularSubquestion,
+  sendPostOnboardingMenu,
   POST_ONBOARDING_TEXT,
 } from './post-onboarding.js';
 import { handleMenuOpen, resolveUserMenuUrl } from './menu-url.js';
@@ -232,6 +232,9 @@ async function handleMenuCommand(ctx, userId, command) {
     case 'balance':
       await sendBalance(ctx, userId);
       return;
+    case 'questions':
+      await sendPostOnboardingMenu(ctx, userId);
+      return;
     case 'topup':
       if (!isAdmin(ctx.from.id)) {
         return;
@@ -279,23 +282,9 @@ export function createBot() {
     }
   });
 
-  bot.use(
-    createAccessGateMiddleware({
-      onAccessGranted: async (ctx) => {
-        const { userId } = await registerUser(ctx, { syncKeyboard: false });
-        await ctx.reply('✅ Доступ открыт!');
-        await handleStartCommand(ctx, userId);
-      },
-    }),
-  );
-
-  if (isBotAccessGateEnabled()) {
-    console.log('[bot] access gate enabled (password required)');
-  }
-
   bot.start(async (ctx) => {
     const { userId } = await registerUser(ctx, { syncKeyboard: false });
-    await handleStartCommand(ctx, userId);
+    await handleStartCommand(ctx, userId, { startPayload: ctx.startPayload });
   });
 
   bot.help(async (ctx) => {
@@ -322,6 +311,11 @@ export function createBot() {
   bot.command('balance', async (ctx) => {
     const { userId } = await registerUser(ctx);
     await handleMenuCommand(ctx, userId, 'balance');
+  });
+
+  bot.command('questions', async (ctx) => {
+    const { userId } = await registerUser(ctx);
+    await handleMenuCommand(ctx, userId, 'questions');
   });
 
   bot.command('topup', async (ctx) => {

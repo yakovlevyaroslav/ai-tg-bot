@@ -7,6 +7,7 @@ import { resolveUserMenuUrl } from './menu-url.js';
 const COMMAND_BUTTON_LABELS = {
   start: '▶️ Старт',
   balance: '💰 Баланс',
+  questions: '❓ Задать вопрос',
   restart: '🔄 Заново',
   topup: '💳 Тарифы',
   help: '❓ Справка',

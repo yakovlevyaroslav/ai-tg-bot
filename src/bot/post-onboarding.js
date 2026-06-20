@@ -1,4 +1,5 @@
 import * as db from '../shared/db.js';
+import { config } from '../shared/config.js';
 import { formatTariffsMessage } from '../shared/pricing.js';
 import {
   postOnboardingInlineKeyboard,
@@ -156,12 +157,34 @@ export function getPopularSubquestion(parentId, subId) {
   };
 }
 
-export async function sendPostOnboardingOffer(ctx, userId, { withIntro = false } = {}) {
-  const menuUrl = await resolveUserMenuUrl(userId);
-  if (withIntro) {
-    await ctx.reply(POST_ONBOARDING_INTRO_TEXT);
+function postOnboardingDelay(ms = config.messageCooldownMs) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export async function sendPostOnboardingMenu(ctx, userId) {
+  const profile = await db.getUserProfile(userId);
+  if (!profile?.onboarding_completed) {
+    await ctx.reply('Сначала пройдите анкету — нажмите /start или /restart.');
+    return false;
   }
+
+  const menuUrl = await resolveUserMenuUrl(userId);
   await ctx.reply(POST_ONBOARDING_TEXT, postOnboardingInlineKeyboard(menuUrl));
+  return true;
+}
+
+export async function sendPostOnboardingOffer(ctx, userId, { withIntro = false } = {}) {
+  if (withIntro) {
+    await postOnboardingDelay();
+    await ctx.reply(POST_ONBOARDING_INTRO_TEXT);
+    await postOnboardingDelay();
+  }
+
+  const sent = await sendPostOnboardingMenu(ctx, userId);
+  if (!sent) {
+    return;
+  }
+
   await syncCommandReplyKeyboardIfNeeded(ctx, userId);
 
   const chatId = ctx.chat?.id;

@@ -9,12 +9,14 @@ import { resolveUserMenuUrl } from './menu-url.js';
 const USER_COMMANDS = [
   { command: 'start', description: 'Главное меню' },
   { command: 'balance', description: 'Баланс вопросов' },
+  { command: 'questions', description: 'Задать вопрос' },
   { command: 'restart', description: 'Сбросить и начать заново' },
 ];
 
 const ADMIN_COMMANDS = [
   { command: 'start', description: 'Главное меню' },
   { command: 'balance', description: 'Баланс вопросов' },
+  { command: 'questions', description: 'Задать вопрос' },
   { command: 'topup', description: 'Купить вопросы' },
   { command: 'restart', description: 'Сбросить и начать заново' },
   { command: 'help', description: 'Справка по командам' },

@@ -17,8 +17,28 @@ import { formatPackagesLine } from '../../shared/pricing.js';
 import { formatRequests } from '../../shared/requests-format.js';
 import * as exportQueries from './export-queries.js';
 import { buildCsv, csvFilename } from './csv.js';
+import * as broadcastQueries from './broadcast-queries.js';
+import {
+  renderBroadcastFormPage,
+  renderBroadcastStatusPage,
+} from './broadcast-page.js';
+import { parseBroadcastButtons, sendTelegramBroadcast, cacheTelegramPhotoFileId } from '../../shared/telegram-api.js';
+import {
+  cancelBroadcastCampaign,
+  pauseBroadcastCampaign,
+  resumeBroadcastCampaign,
+} from '../../shared/broadcast/worker.js';
+import {
+  broadcastUploadMiddleware,
+  getUploadErrorMessage,
+  resolveBroadcastPhoto,
+  resolveLocalPhotoPath,
+  getMediaContentType,
+  isLocalPhotoRef,
+} from './broadcast-media.js';
 import {
   esc,
+  exportFilterSection,
   formatDate,
   formatCredits,
   layout,
@@ -811,38 +831,44 @@ export function createAdminRouter() {
       <div class="card">
         <div class="card-header">Параметры выгрузки</div>
         <form class="export-form" method="get" action="/admin/export/download" id="export-form">
-          <div class="export-grid">
+          ${exportFilterSection(
+            'Тип выгрузки',
+            `
             <label class="export-field export-field-wide">
               <span>Тип данных</span>
               <select name="type" id="export-type" class="export-select">${exportTypeOptions(filters.type)}</select>
             </label>
-
+          `,
+          )}
+          ${exportFilterSection(
+            'Период и охват',
+            `
             <label class="export-field">
               <span>Период</span>
               <select name="period" class="export-select">${exportPeriodOptions(filters.days ?? 30)}</select>
             </label>
-
             <label class="export-field">
               <span>Дата с</span>
               <input type="date" name="date_from" value="${esc(filters.dateFrom ?? '')}">
             </label>
-
             <label class="export-field">
               <span>Дата по</span>
               <input type="date" name="date_to" value="${esc(filters.dateTo ?? '')}">
             </label>
-
             <label class="export-field export-field-check">
               <input type="checkbox" name="exclude_admins" value="1"${filters.excludeAdmins ? ' checked' : ''}>
               <span>Исключить ADMIN_TELEGRAM_IDS</span>
             </label>
-
-            <label class="export-field" data-filter="users visit_cards">
+          `,
+          )}
+          ${exportFilterSection(
+            'Пользователи',
+            `
+            <label class="export-field export-field-wide">
               <span>Поиск</span>
               <input type="search" name="search" value="${esc(filters.search)}" placeholder="ID, telegram, имя, код…">
             </label>
-
-            <label class="export-field" data-filter="users">
+            <label class="export-field">
               <span>Анкета завершена</span>
               ${exportSelect('onboarding', [
                 { value: '', label: 'Все' },
@@ -850,8 +876,7 @@ export function createAdminRouter() {
                 { value: 'no', label: 'Нет' },
               ], filters.onboarding)}
             </label>
-
-            <label class="export-field" data-filter="users">
+            <label class="export-field">
               <span>Есть код личности</span>
               ${exportSelect('has_code', [
                 { value: '', label: 'Все' },
@@ -859,8 +884,7 @@ export function createAdminRouter() {
                 { value: 'no', label: 'Нет' },
               ], filters.hasCode)}
             </label>
-
-            <label class="export-field" data-filter="users">
+            <label class="export-field">
               <span>Визитка опубликована</span>
               ${exportSelect('visit_card', [
                 { value: '', label: 'Все' },
@@ -868,8 +892,13 @@ export function createAdminRouter() {
                 { value: 'no', label: 'Нет' },
               ], filters.visitCard)}
             </label>
-
-            <label class="export-field" data-filter="payments">
+          `,
+            { filter: 'users visit_cards' },
+          )}
+          ${exportFilterSection(
+            'Оплаты',
+            `
+            <label class="export-field">
               <span>Статус оплаты</span>
               ${exportSelect('payment_status', [
                 { value: '', label: 'Все' },
@@ -878,8 +907,7 @@ export function createAdminRouter() {
                 { value: 'cancelled', label: 'Отменена' },
               ], filters.paymentStatus)}
             </label>
-
-            <label class="export-field" data-filter="payments">
+            <label class="export-field">
               <span>Тип продукта</span>
               ${exportSelect('product_type', [
                 { value: '', label: 'Все' },
@@ -887,8 +915,7 @@ export function createAdminRouter() {
                 { value: 'visit_card', label: 'Визитка' },
               ], filters.productType)}
             </label>
-
-            <label class="export-field" data-filter="payments">
+            <label class="export-field">
               <span>Провайдер</span>
               ${exportSelect('provider', [
                 { value: '', label: 'Все' },
@@ -896,31 +923,44 @@ export function createAdminRouter() {
                 { value: 'manual', label: 'Ручной' },
               ], filters.provider)}
             </label>
-
-            <label class="export-field" data-filter="payments">
+            <label class="export-field">
               <span>Фильтр по дате</span>
               ${exportSelect('payment_date', [
                 { value: 'created_at', label: 'Дата создания' },
                 { value: 'completed_at', label: 'Дата завершения' },
               ], filters.paymentDateField)}
             </label>
-
-            <label class="export-field" data-filter="events">
+          `,
+            { filter: 'payments' },
+          )}
+          ${exportFilterSection(
+            'События аналитики',
+            `
+            <label class="export-field">
               <span>Событие</span>
               ${exportSelect('event_name', eventOptions, filters.eventName)}
             </label>
-
-            <label class="export-field" data-filter="events">
+            <label class="export-field">
               <span>Шаг анкеты</span>
               ${exportSelect('event_step', stepOptions, filters.eventStep)}
             </label>
-
-            <label class="export-field" data-filter="usage">
+          `,
+            { filter: 'events' },
+          )}
+          ${exportFilterSection(
+            'Запросы к AI',
+            `
+            <label class="export-field">
               <span>Модель AI</span>
               ${exportSelect('model', modelOptions, filters.model)}
             </label>
-
-            <label class="export-field" data-filter="transactions">
+          `,
+            { filter: 'usage' },
+          )}
+          ${exportFilterSection(
+            'Транзакции баланса',
+            `
+            <label class="export-field">
               <span>Тип транзакции</span>
               ${exportSelect('tx_type', [
                 { value: '', label: 'Все' },
@@ -931,7 +971,9 @@ export function createAdminRouter() {
                 { value: 'purchase', label: 'Покупка' },
               ], filters.txType)}
             </label>
-          </div>
+          `,
+            { filter: 'transactions' },
+          )}
 
           <p class="muted-text export-hint">
             Если указаны «Дата с/по», они перекрывают пресет периода.
@@ -965,11 +1007,11 @@ export function createAdminRouter() {
         (function () {
           const form = document.getElementById('export-form');
           const typeSelect = document.getElementById('export-type');
-          const fields = form.querySelectorAll('[data-filter]');
+          const sections = form.querySelectorAll('.export-section[data-filter]');
 
           function syncFilters() {
             const type = typeSelect.value;
-            fields.forEach((el) => {
+            sections.forEach((el) => {
               const types = (el.getAttribute('data-filter') || '').split(/\\s+/);
               el.hidden = !types.includes(type);
             });
@@ -994,6 +1036,216 @@ export function createAdminRouter() {
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(csv);
+  });
+
+  function broadcastFlash(type, message) {
+    const cls = type === 'error' ? 'flash-error' : 'flash-success';
+    return `<div class="flash ${cls}">${esc(message)}</div>`;
+  }
+
+  function parseBroadcastFormBody(body, file = null) {
+    const photoRef = resolveBroadcastPhoto(body, file);
+    return {
+      name: String(body.name ?? '').trim(),
+      messageText: String(body.message_text ?? '').trim(),
+      photoUrl: photoRef,
+      photoLocal: isLocalPhotoRef(photoRef) ? photoRef : String(body.photo_local ?? '').trim(),
+      buttonsText: String(body.buttons_text ?? ''),
+      replyMarkup: parseBroadcastButtons(body.buttons_text),
+      filters: broadcastQueries.parseAudienceFilters(body),
+    };
+  }
+
+  function formBodyToQuery(body, parsed) {
+    return {
+      ...body,
+      photo_url: parsed.photoUrl || '',
+      photo_local: parsed.photoLocal || '',
+    };
+  }
+
+  router.get('/broadcast/media/:filename', (req, res) => {
+    const filePath = resolveLocalPhotoPath(`local:${req.params.filename}`);
+
+    if (!filePath) {
+      res.status(404).send('Not found');
+      return;
+    }
+
+    res.type(getMediaContentType(req.params.filename)).sendFile(filePath);
+  });
+
+  router.get('/broadcast', async (req, res) => {
+    const campaigns = await broadcastQueries.listBroadcastCampaigns(15);
+    const body = renderBroadcastFormPage({ query: req.query, campaigns });
+    res.type('html').send(layout('Рассылка', 'broadcast', body));
+  });
+
+  router.get('/broadcast/:id', async (req, res) => {
+    const id = Number(req.params.id);
+    const campaign = await broadcastQueries.getBroadcastCampaign(id);
+
+    if (!campaign) {
+      res.status(404).type('html').send(layout('Не найдено', 'broadcast', '<p class="empty">Кампания не найдена</p>'));
+      return;
+    }
+
+    await broadcastQueries.refreshBroadcastCampaignCounters(id);
+    const updated = await broadcastQueries.getBroadcastCampaign(id);
+    const failures = await broadcastQueries.listBroadcastFailures(id, 20);
+    const flash = req.query.ok ? broadcastFlash('success', 'Статус обновлён') : '';
+
+    const body = renderBroadcastStatusPage({ campaign: updated, failures, flash });
+    res.type('html').send(layout(updated.name, 'broadcast', body));
+  });
+
+  router.post('/broadcast', broadcastUploadMiddleware, async (req, res) => {
+    const uploadError = getUploadErrorMessage(req);
+    const action = String(req.body.action ?? '');
+    const parsed = parseBroadcastFormBody(req.body, req.file ?? null);
+    const campaigns = await broadcastQueries.listBroadcastCampaigns(15);
+    const formQuery = formBodyToQuery(req.body, parsed);
+
+    if (uploadError) {
+      const body = renderBroadcastFormPage({
+        query: formQuery,
+        campaigns,
+        flash: broadcastFlash('error', uploadError),
+      });
+      res.type('html').send(layout('Рассылка', 'broadcast', body));
+      return;
+    }
+
+    const redirectQuery = new URLSearchParams();
+
+    for (const [key, value] of Object.entries(formQuery)) {
+      if (typeof value === 'string' && key !== 'action') {
+        redirectQuery.set(key, value);
+      }
+    }
+
+    if (!parsed.messageText && action === 'start') {
+      const body = renderBroadcastFormPage({
+        query: formQuery,
+        campaigns,
+        flash: broadcastFlash('error', 'Введите текст сообщения'),
+      });
+      res.type('html').send(layout('Рассылка', 'broadcast', body));
+      return;
+    }
+
+    if (action === 'test') {
+      const adminIds = config.adminTelegramIds.filter(Number.isFinite);
+      if (!adminIds.length) {
+        const body = renderBroadcastFormPage({
+          query: formQuery,
+          campaigns,
+          flash: broadcastFlash('error', 'Задайте ADMIN_TELEGRAM_IDS в .env'),
+        });
+        res.type('html').send(layout('Рассылка', 'broadcast', body));
+        return;
+      }
+
+      let okCount = 0;
+      let lastError = '';
+
+      for (const chatId of adminIds) {
+        const result = await sendTelegramBroadcast({
+          chatId,
+          text: parsed.messageText,
+          photoUrl: parsed.photoUrl,
+          replyMarkup: parsed.replyMarkup,
+        });
+
+        if (result.ok) {
+          okCount += 1;
+        } else {
+          lastError = result.description ?? 'ошибка отправки';
+        }
+      }
+
+      const body = renderBroadcastFormPage({
+        query: formQuery,
+        campaigns,
+        flash: broadcastFlash(
+          okCount ? 'success' : 'error',
+          okCount
+            ? `Тест отправлен (${okCount} админ${okCount > 1 ? 'ам' : ''})`
+            : `Тест не отправлен: ${lastError}`,
+        ),
+      });
+      res.type('html').send(layout('Рассылка', 'broadcast', body));
+      return;
+    }
+
+    if (action === 'start') {
+      if (!parsed.name) {
+        const body = renderBroadcastFormPage({
+          query: formQuery,
+          campaigns,
+          flash: broadcastFlash('error', 'Укажите название кампании'),
+        });
+        res.type('html').send(layout('Рассылка', 'broadcast', body));
+        return;
+      }
+
+      try {
+        let photoFileId = null;
+        if (isLocalPhotoRef(parsed.photoUrl)) {
+          photoFileId = await cacheTelegramPhotoFileId(parsed.photoUrl);
+          if (!photoFileId) {
+            throw new broadcastQueries.BroadcastError(
+              'Не удалось подготовить картинку для Telegram. Проверьте ADMIN_TELEGRAM_IDS и доступ бота к api.telegram.org',
+            );
+          }
+        }
+
+        const campaign = await broadcastQueries.createBroadcastCampaign({
+          name: parsed.name,
+          messageText: parsed.messageText,
+          photoUrl: parsed.photoUrl,
+          photoFileId,
+          replyMarkup: parsed.replyMarkup,
+          filters: parsed.filters,
+          sortOrder: parsed.filters.sortOrder,
+        });
+
+        res.redirect(`/admin/broadcast/${campaign.id}?ok=1`);
+        return;
+      } catch (err) {
+        const message =
+          err instanceof broadcastQueries.BroadcastError
+            ? err.message
+            : err?.message ?? 'Не удалось создать рассылку';
+        const body = renderBroadcastFormPage({
+          query: formQuery,
+          campaigns,
+          flash: broadcastFlash('error', message),
+        });
+        res.type('html').send(layout('Рассылка', 'broadcast', body));
+        return;
+      }
+    }
+
+    res.redirect(`/admin/broadcast?${redirectQuery.toString()}`);
+  });
+
+  router.post('/broadcast/:id/pause', async (req, res) => {
+    const id = Number(req.params.id);
+    await pauseBroadcastCampaign(id);
+    res.redirect(`/admin/broadcast/${id}`);
+  });
+
+  router.post('/broadcast/:id/resume', async (req, res) => {
+    const id = Number(req.params.id);
+    await resumeBroadcastCampaign(id);
+    res.redirect(`/admin/broadcast/${id}`);
+  });
+
+  router.post('/broadcast/:id/cancel', async (req, res) => {
+    const id = Number(req.params.id);
+    await cancelBroadcastCampaign(id);
+    res.redirect(`/admin/broadcast/${id}`);
   });
 
   router.use((req, res) => {

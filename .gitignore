@@ -6,3 +6,4 @@ logs/
 prompts/system.txt
 *.log
 .DS_Store
+data/broadcast-media/

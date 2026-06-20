@@ -29,11 +29,22 @@ export function userLabel(user) {
   return name || `ID ${user.telegram_id}`;
 }
 
+/** Блок полей фильтра с заголовком; `filter` — типы выгрузки через пробел (для show/hide) */
+export function exportFilterSection(title, gridHtml, { filter } = {}) {
+  const filterAttr = filter ? ` data-filter="${esc(filter)}"` : '';
+  return `
+    <div class="export-section"${filterAttr}>
+      <div class="export-section-title">${esc(title)}</div>
+      <div class="export-grid">${gridHtml}</div>
+    </div>`;
+}
+
 export function layout(title, activeNav, body) {
   const nav = [
     { href: '/admin', label: 'Обзор', key: 'dashboard' },
     { href: '/admin/analytics', label: 'Воронка', key: 'analytics' },
     { href: '/admin/export', label: 'Выгрузка', key: 'export' },
+    { href: '/admin/broadcast', label: 'Рассылка', key: 'broadcast' },
     { href: '/admin/users', label: 'Пользователи', key: 'users' },
     { href: '/admin/payments', label: 'Оплаты', key: 'payments' },
     { href: '/admin/visit-cards', label: 'Визитки', key: 'visit-cards' },

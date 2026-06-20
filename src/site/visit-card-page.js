@@ -1,6 +1,6 @@
 import { escapeHtml, renderSitePage } from './html.js';
 import { config } from '../shared/config.js';
-import { buildVisitCardCodeBreakdown, buildVisitCardPublicUrl } from '../shared/visit-card.js';
+import { buildVisitCardCodeBreakdown, buildVisitCardPublicUrl, buildBotStartLink, BOT_START_QUESTIONS } from '../shared/visit-card.js';
 
 function telegramHtmlToWeb(content) {
   let html = escapeHtml(content);
@@ -93,7 +93,11 @@ function visitCardStyles() {
     .visit-content em { color: #cfc4ff; }
     .share-row {
       margin-top: 28px;
-      text-align: center;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      justify-content: center;
+      align-items: center;
     }
     .share-btn {
       display: inline-flex;
@@ -112,8 +116,28 @@ function visitCardStyles() {
     }
     .share-btn:hover { opacity: .9; }
     .share-btn:active { opacity: .8; }
+    .ask-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 14px 28px;
+      border-radius: 12px;
+      border: 1px solid rgba(196,163,90,.35);
+      background: rgba(255,255,255,.04);
+      color: var(--text);
+      font-size: 1rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: background .2s, border-color .2s;
+    }
+    .ask-btn:hover {
+      background: rgba(124,92,255,.12);
+      border-color: rgba(124,92,255,.45);
+    }
     .share-status {
-      margin-top: 10px;
+      flex-basis: 100%;
+      text-align: center;
       color: var(--accent2);
       font-size: .9rem;
       min-height: 1.2em;
@@ -190,6 +214,7 @@ export function renderVisitCardPage(card) {
   const breakdown = buildVisitCardCodeBreakdown(card.onboarding_data ?? {});
   const contentHtml = telegramHtmlToWeb(card.visit_card_content ?? '');
   const shareUrl = buildVisitCardPublicUrl(code);
+  const askBotLink = buildBotStartLink(BOT_START_QUESTIONS);
 
   const breakdownHtml = breakdown
     .map(
@@ -220,6 +245,7 @@ export function renderVisitCardPage(card) {
     <div class="visit-content prose">${contentHtml}</div>
     <div class="share-row">
       <button type="button" class="share-btn" id="share-btn">🔗 Поделиться визиткой</button>
+      ${askBotLink ? `<a class="ask-btn" href="${escapeHtml(askBotLink)}" target="_blank" rel="noopener">❓ Задать вопрос</a>` : ''}
       <div class="share-status" id="share-status"></div>
     </div>
     <p class="share-note">

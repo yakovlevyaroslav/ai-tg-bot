@@ -11,7 +11,7 @@ import {
   syncCommandReplyKeyboardIfNeeded,
 } from './command-reply-keyboard.js';
 import { syncUserBotCommands } from './bot-commands.js';
-import { sendPostOnboardingOffer } from './post-onboarding.js';
+import { sendPostOnboardingOffer, sendQuestionsMenu } from './post-onboarding.js';
 import {
   generateRandomOnboardingData,
   buildAdminSkipCodeMessage,
@@ -304,11 +304,18 @@ async function resumeOnboarding(ctx, userId, profile) {
 }
 
 /** /start — без сброса: меню после анкеты или продолжение с текущего шага */
-export async function handleStartCommand(ctx, userId) {
+export async function handleStartCommand(ctx, userId, { startPayload = '' } = {}) {
   trackEvent(userId, EVENTS.BOT_START);
   const profile = await db.getUserProfile(userId);
+  const payload = String(startPayload ?? '').trim().toLowerCase();
 
   if (profile?.onboarding_completed) {
+    if (payload === 'questions') {
+      await sendQuestionsMenu(ctx);
+      await syncCommandReplyKeyboardIfNeeded(ctx, userId);
+      return;
+    }
+
     await sendPostOnboardingOffer(ctx, userId);
     return;
   }

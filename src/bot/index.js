@@ -40,6 +40,9 @@ export async function runBot({ setupSignals = true, skipInit = false } = {}) {
   botRunning = true;
   console.log(`Bot is running (AI_PROVIDER=${config.aiProvider})`);
 
+  const { startBroadcastWorker } = await import('../shared/broadcast/worker.js');
+  startBroadcastWorker();
+
   return { bot, shutdown, setBotRunning: (v) => { botRunning = v; } };
 }
 

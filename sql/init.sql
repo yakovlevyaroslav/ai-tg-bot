@@ -15,9 +15,6 @@ ALTER TABLE users
     CHECK (specialist IS NULL OR specialist IN ('tarolog', 'numerolog', 'rodolog'));
 
 ALTER TABLE users
-  ADD COLUMN IF NOT EXISTS access_granted BOOLEAN NOT NULL DEFAULT FALSE;
-
-ALTER TABLE users
   ADD COLUMN IF NOT EXISTS onboarding_step TEXT;
 
 ALTER TABLE users
@@ -155,3 +152,45 @@ ALTER TABLE pending_payments
 ALTER TABLE pending_payments
   ADD CONSTRAINT pending_payments_product_type_check
     CHECK (product_type IN ('topup', 'visit_card'));
+
+CREATE TABLE IF NOT EXISTS broadcast_campaigns (
+  id BIGSERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  message_text TEXT NOT NULL DEFAULT '',
+  parse_mode TEXT NOT NULL DEFAULT 'HTML',
+  photo_url TEXT,
+  photo_file_id TEXT,
+  reply_markup JSONB,
+  filters JSONB NOT NULL DEFAULT '{}',
+  sort_order TEXT NOT NULL DEFAULT 'created_at_desc',
+  status TEXT NOT NULL DEFAULT 'draft'
+    CHECK (status IN ('draft', 'queued', 'running', 'paused', 'completed', 'cancelled')),
+  total_recipients INT NOT NULL DEFAULT 0,
+  sent_count INT NOT NULL DEFAULT 0,
+  failed_count INT NOT NULL DEFAULT 0,
+  skipped_count INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  started_at TIMESTAMPTZ,
+  completed_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS broadcast_deliveries (
+  id BIGSERIAL PRIMARY KEY,
+  campaign_id BIGINT NOT NULL REFERENCES broadcast_campaigns(id) ON DELETE CASCADE,
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  telegram_id BIGINT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'sent', 'failed', 'skipped')),
+  error_description TEXT,
+  sent_at TIMESTAMPTZ,
+  UNIQUE (campaign_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_broadcast_campaigns_status
+  ON broadcast_campaigns (status, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_broadcast_deliveries_campaign_status
+  ON broadcast_deliveries (campaign_id, status);
+
+ALTER TABLE broadcast_campaigns
+  ADD COLUMN IF NOT EXISTS photo_file_id TEXT;
