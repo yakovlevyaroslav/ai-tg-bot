@@ -176,8 +176,14 @@ export function createAdminRouter() {
   router.use(
     '/static',
     express.static(staticDir, {
-      maxAge: process.env.NODE_ENV === 'production' ? '1d' : 0,
+      maxAge: process.env.NODE_ENV === 'production' ? '1h' : 0,
+      etag: true,
       fallthrough: false,
+      setHeaders(res, filePath) {
+        if (filePath.endsWith('admin.css')) {
+          res.setHeader('Cache-Control', 'public, max-age=3600, must-revalidate');
+        }
+      },
     }),
   );
 
@@ -1181,19 +1187,23 @@ export function createAdminRouter() {
       let okCount = 0;
       let lastError = '';
 
-      for (const chatId of adminIds) {
-        const result = await sendTelegramBroadcast({
-          chatId,
-          text: parsed.messageText,
-          photoUrl: parsed.photoUrl,
-          replyMarkup: parsed.replyMarkup,
-        });
+      try {
+        for (const chatId of adminIds) {
+          const result = await sendTelegramBroadcast({
+            chatId,
+            text: parsed.messageText,
+            photoUrl: parsed.photoUrl,
+            replyMarkup: parsed.replyMarkup,
+          });
 
-        if (result.ok) {
-          okCount += 1;
-        } else {
-          lastError = result.description ?? 'ошибка отправки';
+          if (result.ok) {
+            okCount += 1;
+          } else {
+            lastError = result.description ?? 'ошибка отправки';
+          }
         }
+      } catch (err) {
+        lastError = err?.message ?? 'ошибка отправки';
       }
 
       const body = renderBroadcastFormPage({

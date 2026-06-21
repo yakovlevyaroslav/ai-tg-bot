@@ -20,7 +20,8 @@
 ```
 ┌──────────── RU VPS ────────────┐     ┌──────────── NL VPS ────────────┐
 │ nginx → ai-tg-site (:3080)     │     │ ai-tg-bot                      │
-│ Squid (:3128)                  │     │ PostgreSQL (:5432)             │
+│ Squid (:3128) ◄── NL ЮKassa    │     │ PostgreSQL (:5432)             │
+│ TELEGRAM_API_PROXY ────────────┼────►│ Squid (:3128) ◄── RU Telegram  │
 │ домен → сюда                   │────►│                                │
 └────────────────────────────────┘     └────────────────────────────────┘
 ```
@@ -29,7 +30,9 @@
 |---|--------|--------|
 | **Инструкция** | [BOT-NL-VPS.md](./deploy/BOT-NL-VPS.md) | [SITE-RU-VPS.md](./deploy/SITE-RU-VPS.md) |
 | **Конфиг** | `.env.bot` | `.env.site` |
-| **systemd** | `ai-tg-bot` | `ai-tg-site`, `squid` |
+| **systemd** | `ai-tg-bot`, `squid` | `ai-tg-site`, `squid` |
+
+**Squid:** на RU — для ЮKassa (NL → RU); на NL — для Telegram (RU → NL).
 
 ### Чеклист
 
@@ -40,6 +43,7 @@
 | 3 | NL | [Postgres для RU](./deploy/BOT-NL-VPS.md#шаг-6-доступ-к-postgres-с-ru-vps) |
 | 4 | RU | [DNS + SSL + webhook](./deploy/SITE-RU-VPS.md) шаги 6–8 |
 | 5 | NL | `YOOKASSA_PROXY` → restart бота |
+| 6 | NL + RU | Squid на NL + `TELEGRAM_API_PROXY` на RU ([шаг 8 NL](./deploy/BOT-NL-VPS.md#шаг-8-squid-на-nl-telegram-для-ru-сайта), [шаг 9 RU](./deploy/SITE-RU-VPS.md#шаг-9-telegram-через-squid-на-nl)) |
 
 ---
 
@@ -66,7 +70,7 @@ sudo bash deploy/setup-domain.sh домен.ru admin@домен.ru
 
 На **одном VPS** — оба файла, один `DATABASE_URL` (`127.0.0.1`), без `YOOKASSA_PROXY`.
 
-На **двух VPS** — `DATABASE_URL` на RU указывает на `NL_VPS_IP`; на NL — `YOOKASSA_PROXY` → Squid на RU.
+На **двух VPS** — `DATABASE_URL` на RU указывает на `NL_VPS_IP`; на NL — `YOOKASSA_PROXY` → Squid на RU; на RU — `TELEGRAM_API_PROXY` → Squid на NL.
 
 **Совпадают на всех серверах:** `TELEGRAM_BOT_TOKEN`, `YOOKASSA_*`, `TOPUP_PACKAGES`, `PUBLIC_SITE_URL`.
 

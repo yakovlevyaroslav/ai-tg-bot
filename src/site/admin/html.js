@@ -1,3 +1,22 @@
+import { statSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const ADMIN_CSS_PATH = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '../../../public/admin/admin.css',
+);
+
+/** Версия по mtime — после деплоя браузер подтянет новый CSS (не залипнет на старом кэше). */
+export function adminStylesheetHref() {
+  try {
+    const { mtimeMs } = statSync(ADMIN_CSS_PATH);
+    return `/admin/static/admin.css?v=${Math.floor(mtimeMs)}`;
+  } catch {
+    return '/admin/static/admin.css';
+  }
+}
+
 export function esc(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -63,7 +82,7 @@ export function layout(title, activeNav, body) {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>${esc(title)} — AI Bot Admin</title>
-  <link rel="stylesheet" href="/admin/static/admin.css">
+  <link rel="stylesheet" href="${adminStylesheetHref()}">
 </head>
 <body>
   <header class="header">

@@ -1,5 +1,7 @@
+import './dns-ipv4-first.js';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { Agent, ProxyAgent, fetch as undiciFetch } from 'undici';
 import { config } from './config.js';
 import { BOT_REPLY_PARSE_MODE, splitFormattedMessage } from './telegram-format.js';
 import {
@@ -8,9 +10,68 @@ import {
 } from './broadcast/media.js';
 
 const API_BASE = `https://api.telegram.org/bot${config.telegramToken}`;
+const TIMEOUT_MS = Number(process.env.TELEGRAM_API_TIMEOUT_MS || 30000);
+
+let cachedDispatcher = null;
+
+function getDispatcher() {
+  if (cachedDispatcher) {
+    return cachedDispatcher;
+  }
+
+  const connect = { family: 4, timeout: TIMEOUT_MS };
+
+  if (config.telegramApiProxy) {
+    cachedDispatcher = new ProxyAgent({
+      uri: config.telegramApiProxy,
+      connect,
+      bodyTimeout: TIMEOUT_MS,
+      headersTimeout: TIMEOUT_MS,
+    });
+    console.log(
+      `[telegram-api] using proxy: ${config.telegramApiProxy.replace(/\/\/[^@]+@/, '//***@')}`,
+    );
+  } else {
+    cachedDispatcher = new Agent({
+      connect,
+      bodyTimeout: TIMEOUT_MS,
+      headersTimeout: TIMEOUT_MS,
+    });
+  }
+
+  return cachedDispatcher;
+}
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function formatTelegramNetworkError(err) {
+  const cause = err?.cause;
+  const code = cause?.code || cause?.errno || err?.code;
+  const via = config.telegramApiProxy ? ' (через прокси)' : '';
+
+  if (code === 'UND_ERR_CONNECT_TIMEOUT' || code === 'ETIMEDOUT') {
+    return `Таймаут подключения к api.telegram.org${via}. Проверьте VPN или задайте TELEGRAM_API_PROXY в .env`;
+  }
+
+  if (code === 'ENOTFOUND') {
+    return `Не удалось разрешить api.telegram.org (${code})${via}`;
+  }
+
+  if (code === 'ECONNREFUSED' || code === 'ECONNRESET') {
+    return `Нет связи с api.telegram.org (${code})${via}`;
+  }
+
+  return err?.message || 'fetch failed';
+}
+
+async function telegramFetch(url, init = {}) {
+  try {
+    return await undiciFetch(url, { ...init, dispatcher: getDispatcher() });
+  } catch (err) {
+    return { networkError: formatTelegramNetworkError(err) };
+  }
 }
 
 async function callTelegramMultipart(method, fields, fileField, filePath) {
@@ -36,10 +97,14 @@ async function callTelegramMultipart(method, fields, fileField, filePath) {
 
   form.append(fileField, new Blob([buffer], { type: mime }), filename);
 
-  const response = await fetch(`${API_BASE}/${method}`, {
+  const response = await telegramFetch(`${API_BASE}/${method}`, {
     method: 'POST',
     body: form,
   });
+
+  if (response.networkError) {
+    return { ok: false, description: response.networkError };
+  }
 
   const data = await response.json().catch(() => ({}));
 
@@ -83,11 +148,15 @@ async function callTelegram(method, body, { retries = 2 } = {}) {
   while (attempt <= retries) {
     attempt += 1;
 
-    const response = await fetch(`${API_BASE}/${method}`, {
+    const response = await telegramFetch(`${API_BASE}/${method}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
+
+    if (response.networkError) {
+      return { ok: false, description: response.networkError };
+    }
 
     const data = await response.json().catch(() => ({}));
 

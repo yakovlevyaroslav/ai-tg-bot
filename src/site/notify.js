@@ -1,6 +1,6 @@
-import { config } from '../shared/config.js';
 import { buildPostActionsKeyboard } from '../bot/menu-url.js';
 import { formatQuestions } from '../shared/requests-format.js';
+import { sendTelegramMessage } from '../shared/telegram-api.js';
 
 /** Уже отправленные уведомления (in-memory, защита от дублей poll/webhook). */
 const notifiedPaymentCodes = new Set();
@@ -42,22 +42,14 @@ export async function notifyPaymentSuccess(result, { force = false } = {}) {
   const keyboard = userId ? await buildPostActionsKeyboard(userId) : undefined;
 
   try {
-    const response = await fetch(
-      `https://api.telegram.org/bot${config.telegramToken}/sendMessage`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: chatId,
-          text: buildPaymentSuccessText(result),
-          reply_markup: keyboard?.reply_markup,
-        }),
-      },
-    );
+    const sendResult = await sendTelegramMessage({
+      chatId,
+      text: buildPaymentSuccessText(result),
+      replyMarkup: keyboard?.reply_markup ?? null,
+    });
 
-    if (!response.ok) {
-      const data = await response.json().catch(() => ({}));
-      console.warn('[notify] sendMessage failed:', data?.description ?? response.statusText);
+    if (!sendResult.ok) {
+      console.warn('[notify] sendMessage failed:', sendResult.description ?? 'unknown error');
       return;
     }
 

@@ -198,6 +198,9 @@ export const config = {
   /** HTTP(S)-прокси для запросов к api.yookassa.ru (нужен, если основной сервер не в РФ).
    *  Формат: http://user:pass@host:port или http://host:port. Пусто — без прокси. */
   yookassaProxy: process.env.YOOKASSA_PROXY?.trim() || '',
+  /** HTTP(S)-прокси для запросов к api.telegram.org (если прямой доступ недоступен).
+   *  Формат: http://user:pass@host:port или http://host:port. Пусто — без прокси. */
+  telegramApiProxy: process.env.TELEGRAM_API_PROXY?.trim() || '',
   publicSiteName: process.env.PUBLIC_SITE_NAME || 'Код личности',
   publicSiteTagline:
     process.env.PUBLIC_SITE_TAGLINE ||

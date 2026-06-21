@@ -13,12 +13,20 @@
 Telegram / OpenAI  ──►  NL VPS
                          ├── ai-tg-bot
                          ├── PostgreSQL :5432  ◄── RU VPS (только IP RU)
+                         ├── Squid :3128  ◄── RU (TELEGRAM_API_PROXY)
                          └── YOOKASSA_PROXY ──► Squid на RU :3128
 ```
 
 | На NL | На RU |
 |-------|-------|
-| `ai-tg-bot`, Postgres | `ai-tg-site`, nginx, Squid, домен |
+| `ai-tg-bot`, Postgres, Squid (Telegram) | `ai-tg-site`, nginx, Squid (ЮKassa), домен |
+
+**Два Squid — разные направления:**
+
+| Где | Кто подключается | Зачем |
+|-----|------------------|-------|
+| **RU :3128** | NL (бот) | Запросы к `api.yookassa.ru` (IP бота не в РФ) |
+| **NL :3128** | RU (сайт) | Запросы к `api.telegram.org` (рассылка, уведомления об оплате) |
 
 ---
 
@@ -31,6 +39,7 @@ Telegram / OpenAI  ──►  NL VPS
 - [ ] Шаг 5 — `install-systemd.sh --bot-only`
 - [ ] Шаг 6 — доступ Postgres с RU (после RU VPS)
 - [ ] Шаг 7 — `YOOKASSA_PROXY` (после Squid на RU)
+- [ ] Шаг 8 — Squid на NL для Telegram с RU (после RU VPS)
 
 ---
 
@@ -181,6 +190,95 @@ sudo systemctl restart ai-tg-bot
 
 ---
 
+## Шаг 8. Squid на NL (Telegram для RU-сайта)
+
+Сайт на RU (админка, webhook) иногда **не достучится** до `api.telegram.org` напрямую.  
+Прокси на NL решает это: RU → NL Squid → Telegram API.
+
+IP сайта (RU): узнайте на RU-сервере `curl -4 ifconfig.me`.
+
+```bash
+ssh root@NL_VPS_IP
+
+apt install -y squid
+# ← IP RU VPS: на RU выполните curl -4 ifconfig.me
+
+RU_VPS_IP=130.49.149.149   
+cat > /etc/squid/squid.conf <<EOF
+http_port 3128
+
+acl ru_site src ${RU_VPS_IP}/32
+acl SSL_ports port 443
+acl CONNECT method CONNECT
+
+http_access allow CONNECT SSL_ports ru_site
+http_access deny all
+
+visible_hostname personality-nl-proxy
+
+cache_dir ufs /var/spool/squid 100 16 256
+coredump_dir /var/spool/squid
+EOF
+# На Ubuntu без cache_dir Squid часто не поднимается
+
+mkdir -p /var/spool/squid
+chown -R proxy:proxy /var/spool/squid
+squid -z -f /etc/squid/squid.conf
+squid -k parse
+
+systemctl enable squid
+systemctl restart squid
+systemctl status squid --no-pager
+ss -tlnp | grep 3128
+```
+
+Если порт **3128 не слушается**:
+
+```bash
+journalctl -u squid -n 50 --no-pager
+squid -k parse 2>&1 | tail -20
+cat -n /etc/squid/squid.conf | head -20
+```
+
+Частые ошибки:
+
+| Симптом | Решение |
+|---------|---------|
+| В `acl` строка `RU_VPS_IP`, не IP | задайте `RU_VPS_IP=...` **до** heredoc |
+| `Failed to make swap directory` | `mkdir -p /var/spool/squid && chown -R proxy:proxy /var/spool/squid && squid -z` |
+| `restart` «висит» | первый старт создаёт кэш — подождите 30–60 с или смотрите `journalctl -u squid -f` |
+| Порт занят | `ss -tlnp | grep 3128` — другой процесс; смените `http_port` или остановите конфликт |
+
+Firewall — только RU:
+
+```bash
+ufw allow from ${RU_VPS_IP} to any port 3128 proto tcp
+ufw reload
+```
+
+Проверка с **RU** (подставьте токен бота):
+
+```bash
+curl -sS --max-time 15 -x http://NL_VPS_IP:3128 \
+  "https://api.telegram.org/bot<TOKEN>/getMe"
+```
+
+Ожидается `"ok":true`.
+
+На **RU** в `.env.site`:
+
+```env
+TELEGRAM_API_PROXY=http://NL_VPS_IP:3128
+```
+
+```bash
+sudo systemctl restart ai-tg-site
+```
+
+Проверка: в админке **Рассылка → Тест** или оплата → уведомление в Telegram.
+
+---
+
 ## Обновление
 
 ```bash
@@ -197,6 +295,7 @@ cd ~/projects/ai-tg-bot
 | Бот не стартует | `journalctl -u ai-tg-bot -n 50` |
 | Сайт не видит БД | `pg_hba`, firewall, `DATABASE_URL` на RU |
 | ЮKassa timeout | Squid на RU, `YOOKASSA_PROXY`, `ufw` 3128 с NL |
+| Рассылка / notify с RU | Squid на NL, `TELEGRAM_API_PROXY`, `ufw` 3128 с RU |
 | OpenAI timeout | Прокси или другой хостинг NL |
 
 Дальше: [SITE-RU-VPS.md](./SITE-RU-VPS.md) — сайт, домен, Squid, webhook.
