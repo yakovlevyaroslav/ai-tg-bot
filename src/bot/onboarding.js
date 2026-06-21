@@ -21,6 +21,7 @@ import { getUserErrorMessage } from '../shared/errors.js';
 import { buildWelcomeText, WELCOME_MESSAGE_PARSE_MODE } from '../shared/welcome-message.js';
 import { replyFormatted } from '../shared/telegram-format.js';
 import { EVENTS, trackEvent } from '../shared/analytics.js';
+import { isStartCommand, getAcquirableStartPayload } from '../shared/start-payload.js';
 
 const MESSAGES = {
   askName:
@@ -305,12 +306,19 @@ async function resumeOnboarding(ctx, userId, profile) {
 
 /** /start — без сброса: меню после анкеты или продолжение с текущего шага */
 export async function handleStartCommand(ctx, userId, { startPayload = '' } = {}) {
+  const { saved, isFirst } = await db.saveUserStartPayload(userId, startPayload);
+  if (saved) {
+    trackEvent(userId, EVENTS.ACQUISITION_START, {
+      start_payload: getAcquirableStartPayload(startPayload),
+      first_touch: isFirst,
+    });
+  }
+
   trackEvent(userId, EVENTS.BOT_START);
   const profile = await db.getUserProfile(userId);
-  const payload = String(startPayload ?? '').trim().toLowerCase();
 
   if (profile?.onboarding_completed) {
-    if (payload === 'questions') {
+    if (isStartCommand(startPayload)) {
       await sendQuestionsMenu(ctx);
       await syncCommandReplyKeyboardIfNeeded(ctx, userId);
       return;

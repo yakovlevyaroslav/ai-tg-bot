@@ -7,6 +7,7 @@ import {
   ONBOARDING_FUNNEL_STEPS,
   PAYMENT_FUNNEL_STEPS,
 } from './analytics-queries.js';
+import { appendStartPayloadFilters, parseStartPayloadFilters } from './user-audience-sql.js';
 
 export const EXPORT_TYPES = {
   users: {
@@ -60,6 +61,20 @@ export const EVENT_NAME_OPTIONS = Object.values(EVENTS).sort();
 
 const MAX_ROWS = 50_000;
 
+const USER_EXPORT_SORT_SQL = {
+  created_at_desc: 'u.created_at DESC',
+  created_at_asc: 'u.created_at ASC',
+  start_payload_asc: 'u.start_payload ASC NULLS LAST, u.created_at DESC',
+  start_payload_desc: 'u.start_payload DESC NULLS LAST, u.created_at DESC',
+};
+
+export const USER_EXPORT_SORT_OPTIONS = [
+  { value: 'created_at_desc', label: 'Регистрация: новые → старые' },
+  { value: 'created_at_asc', label: 'Регистрация: старые → новые' },
+  { value: 'start_payload_asc', label: 'Метка ?start=: А → Я' },
+  { value: 'start_payload_desc', label: 'Метка ?start=: Я → А' },
+];
+
 function adminExcludeClause(alias = 'u', startIdx = 1) {
   const ids = config.adminTelegramIds.filter(Number.isFinite);
   if (!ids.length) {
@@ -112,6 +127,10 @@ export function parseExportFilters(query = {}) {
       ? query.tx_type
       : '',
     model: String(query.model ?? '').trim(),
+    ...parseStartPayloadFilters(query),
+    userSortOrder: USER_EXPORT_SORT_SQL[query.user_sort]
+      ? query.user_sort
+      : 'created_at_desc',
     limit: Math.min(Math.max(Number(query.limit) || MAX_ROWS, 1), MAX_ROWS),
   };
 }
@@ -159,6 +178,11 @@ export async function exportUsers(filters) {
       OR u.first_name ILIKE $${params.length}
       OR u.id::text ILIKE $${params.length}
       OR u.personality_code ILIKE $${params.length}
+      OR u.start_payload ILIKE $${params.length}
+      OR EXISTS (
+        SELECT 1 FROM user_start_payloads usp
+        WHERE usp.user_id = u.id AND usp.payload ILIKE $${params.length}
+      )
     )`);
   }
 
@@ -176,14 +200,17 @@ export async function exportUsers(filters) {
 
   if (filters.visitCard === 'yes') {
     clauses.push('u.visit_card_published = TRUE');
-  } else if (filters.visitCard === 'no') {
+  } else   if (filters.visitCard === 'no') {
     clauses.push('COALESCE(u.visit_card_published, FALSE) = FALSE');
   }
+
+  appendStartPayloadFilters({ filters, params, clauses });
 
   const adminSql = buildAdminSql('u', filters, params);
 
   params.push(filters.limit);
   const limitIdx = params.length;
+  const orderSql = USER_EXPORT_SORT_SQL[filters.userSortOrder] ?? USER_EXPORT_SORT_SQL.created_at_desc;
 
   const { rows } = await pool.query(
     `SELECT
@@ -192,6 +219,10 @@ export async function exportUsers(filters) {
        u.username,
        u.first_name,
        u.created_at,
+       u.start_payload,
+       (SELECT string_agg(DISTINCT usp.payload, ', ' ORDER BY usp.payload)
+        FROM user_start_payloads usp
+        WHERE usp.user_id = u.id) AS start_payloads_all,
        u.onboarding_completed,
        u.onboarding_step,
        COALESCE(u.personality_code, u.onboarding_data->>'personality_code') AS personality_code,
@@ -206,7 +237,7 @@ export async function exportUsers(filters) {
      FROM users u
      LEFT JOIN balances b ON b.user_id = u.id
      WHERE ${clauses.join(' AND ')}${adminSql}
-     ORDER BY u.created_at DESC
+     ORDER BY ${orderSql}
      LIMIT $${limitIdx}`,
     params,
   );
@@ -584,6 +615,8 @@ const COLUMN_MAP = {
     { key: 'username', label: 'username' },
     { key: 'first_name', label: 'first_name' },
     { key: 'created_at', label: 'registered_at' },
+    { key: 'start_payload', label: 'start_payload_first' },
+    { key: 'start_payloads_all', label: 'start_payloads_all' },
     { key: 'onboarding_completed', label: 'onboarding_completed' },
     { key: 'onboarding_step', label: 'onboarding_step' },
     { key: 'personality_code', label: 'personality_code' },

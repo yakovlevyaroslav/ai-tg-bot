@@ -107,6 +107,23 @@ function audienceFilterFields(filters) {
     `,
     )}
     ${exportFilterSection(
+      'Источник (?start=)',
+      `
+      <label class="export-field">
+        <span>Метка ?start=</span>
+        <input type="search" name="start_payload" value="${esc(filters.startPayload)}" placeholder="vk_march…">
+      </label>
+      <label class="export-field">
+        <span>Есть метку</span>
+        ${exportSelect('has_start_payload', [
+          { value: '', label: 'Все' },
+          { value: 'yes', label: 'Да (любая из истории)' },
+          { value: 'no', label: 'Нет (органика)' },
+        ], filters.hasStartPayload)}
+      </label>
+    `,
+    )}
+    ${exportFilterSection(
       'Баланс и активность',
       `
       <label class="export-field">
@@ -304,6 +321,17 @@ function renderBroadcastButtonsHelp() {
 🪪 Мой код личности => callback:post:menu:open
 🌐 Сайт => ${site}</pre>
 
+        <h3 class="broadcast-help-title">UTM для ссылок на сайт</h3>
+        <p class="muted-text">
+          В форме рассылки блок «UTM для URL-кнопок» — параметры автоматически добавятся ко всем
+          <strong>https-кнопкам</strong> при отправке. Callback-кнопки бота не меняются.
+          Для отслеживения перехода <strong>в бота</strong> используйте отдельные ссылки
+          <code>t.me/бот?start=метка</code> (не utm_*).
+        </p>
+        <pre class="broadcast-preview">Кнопка: 🌐 Сайт => ${site}
+utm_source=telegram · utm_medium=broadcast · utm_campaign=march
+→ ${site}/?utm_source=telegram&utm_medium=broadcast&utm_campaign=march</pre>
+
         <h3 class="broadcast-help-title">Ссылки (URL-кнопки)</h3>
         <p class="muted-text">Открываются в браузере. Подставьте свой домен из <code>PUBLIC_SITE_URL</code>.</p>
         <div class="table-wrap">
@@ -482,10 +510,36 @@ export function renderBroadcastFormPage({ query = {}, campaigns = [], flash = ''
           </label>
         `,
         )}
+        ${exportFilterSection(
+          'UTM для URL-кнопок',
+          `
+          <label class="export-field">
+            <span>utm_source</span>
+            <input type="text" name="utm_source" value="${esc(query.utm_source ?? '')}" placeholder="telegram">
+          </label>
+          <label class="export-field">
+            <span>utm_medium</span>
+            <input type="text" name="utm_medium" value="${esc(query.utm_medium ?? '')}" placeholder="broadcast">
+          </label>
+          <label class="export-field">
+            <span>utm_campaign</span>
+            <input type="text" name="utm_campaign" value="${esc(query.utm_campaign ?? '')}" placeholder="march_sale">
+          </label>
+          <label class="export-field">
+            <span>utm_content</span>
+            <input type="text" name="utm_content" value="${esc(query.utm_content ?? '')}" placeholder="btn_site">
+          </label>
+          <label class="export-field">
+            <span>utm_term</span>
+            <input type="text" name="utm_term" value="${esc(query.utm_term ?? '')}" placeholder="">
+          </label>
+        `,
+        )}
         <p class="muted-text export-hint">
           <strong>Кратко:</strong> строка = ряд кнопок; в ряду — через <code>||</code>.
           Ссылка: <code>Текст => https://…</code>.
           Бот: <code>Текст => callback:post:tariffs</code> (или без префикса <code>callback:</code>).
+          UTM добавляется только к <strong>URL-кнопкам</strong> (сайт, не <code>t.me?start=</code>).
           ${esc(testHint)}.
         </p>
       </div>

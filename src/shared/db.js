@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { getDatabaseUrl } from './env.js';
 import { trackOnboardingStep } from './analytics.js';
+import { getAcquirableStartPayload } from './start-payload.js';
 import { sanitizeVisitCardContent } from './visit-card.js';
 
 const { Pool } = pg;
@@ -45,11 +46,34 @@ export async function upsertUser({ telegramId, username, firstName }) {
   return rows[0];
 }
 
+/** Каждый /start с меткой — в историю; users.start_payload — только first touch */
+export async function saveUserStartPayload(userId, rawPayload) {
+  const payload = getAcquirableStartPayload(rawPayload);
+  if (!payload) {
+    return { saved: false, isFirst: false };
+  }
+
+  await pool.query(
+    `INSERT INTO user_start_payloads (user_id, payload) VALUES ($1, $2)`,
+    [userId, payload],
+  );
+
+  const { rowCount } = await pool.query(
+    `UPDATE users
+     SET start_payload = $2
+     WHERE id = $1 AND COALESCE(start_payload, '') = ''`,
+    [userId, payload],
+  );
+
+  return { saved: true, isFirst: rowCount > 0 };
+}
+
 export async function getUserProfile(userId) {
   const { rows } = await pool.query(
     `SELECT id, telegram_id, username, first_name, welcome_bonus_granted,
             onboarding_step, onboarding_data, onboarding_completed,
-            personality_code, visit_card_published, visit_card_published_at
+            personality_code, visit_card_published, visit_card_published_at,
+            start_payload
      FROM users WHERE id = $1`,
     [userId],
   );

@@ -23,6 +23,26 @@ ALTER TABLE users
 ALTER TABLE users
   ADD COLUMN IF NOT EXISTS onboarding_completed BOOLEAN NOT NULL DEFAULT FALSE;
 
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS start_payload TEXT;
+
+CREATE TABLE IF NOT EXISTS user_start_payloads (
+  id BIGSERIAL PRIMARY KEY,
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  payload TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_users_start_payload
+  ON users (start_payload)
+  WHERE start_payload IS NOT NULL AND start_payload <> '';
+
+CREATE INDEX IF NOT EXISTS idx_user_start_payloads_user_created
+  ON user_start_payloads (user_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_user_start_payloads_payload
+  ON user_start_payloads (payload);
+
 CREATE TABLE IF NOT EXISTS balances (
   user_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   credits BIGINT NOT NULL DEFAULT 0 CHECK (credits >= 0),

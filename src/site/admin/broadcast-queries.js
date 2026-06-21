@@ -1,6 +1,7 @@
 import { getPool } from '../../shared/db.js';
 import { config } from '../../shared/config.js';
 import { ONBOARDING_FUNNEL_STEPS } from './analytics-queries.js';
+import { appendStartPayloadFilters, parseStartPayloadFilters } from './user-audience-sql.js';
 
 export const BROADCAST_MAX_RECIPIENTS = Number(process.env.BROADCAST_MAX_RECIPIENTS || 10_000);
 
@@ -13,6 +14,8 @@ export const BROADCAST_SORT_OPTIONS = [
   { value: 'credits_asc', label: 'Баланс: меньше → больше' },
   { value: 'messages_desc', label: 'Сообщений: больше → меньше' },
   { value: 'questions_desc', label: 'Вопросов к AI: больше → меньше' },
+  { value: 'start_payload_asc', label: 'Метка ?start=: А → Я' },
+  { value: 'start_payload_desc', label: 'Метка ?start=: Я → А' },
   { value: 'name_asc', label: 'Имя: А → Я' },
 ];
 
@@ -27,6 +30,8 @@ const SORT_SQL = {
   messages_asc: 'messages_count ASC',
   questions_desc: 'questions_count DESC',
   questions_asc: 'questions_count ASC',
+  start_payload_asc: 'u.start_payload ASC NULLS LAST',
+  start_payload_desc: 'u.start_payload DESC NULLS LAST',
   name_asc: "LOWER(COALESCE(NULLIF(u.first_name, ''), NULLIF(u.username, ''), u.telegram_id::text)) ASC",
 };
 
@@ -87,6 +92,7 @@ export function parseAudienceFilters(query = {}) {
     inactiveDays: Number.isFinite(Number(query.inactive_days))
       ? Math.max(0, Number(query.inactive_days))
       : null,
+    ...parseStartPayloadFilters(query),
     sortOrder: SORT_SQL[sortCandidate] ? sortCandidate : 'created_at_desc',
     limit: Math.min(
       Math.max(Number(query.limit) || BROADCAST_MAX_RECIPIENTS, 1),
@@ -127,6 +133,11 @@ function buildAudienceWhere(filters, params) {
       OR u.first_name ILIKE $${params.length}
       OR u.id::text ILIKE $${params.length}
       OR u.personality_code ILIKE $${params.length}
+      OR u.start_payload ILIKE $${params.length}
+      OR EXISTS (
+        SELECT 1 FROM user_start_payloads usp
+        WHERE usp.user_id = u.id AND usp.payload ILIKE $${params.length}
+      )
     )`);
   }
 
@@ -181,6 +192,8 @@ function buildAudienceWhere(filters, params) {
       u.created_at
     ) < NOW() - ($${params.length}::int * INTERVAL '1 day')`);
   }
+
+  appendStartPayloadFilters({ filters, params, clauses });
 
   const admin = adminExcludeClause('u', params.length + 1);
   params.push(...admin.params);

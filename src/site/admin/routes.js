@@ -24,6 +24,10 @@ import {
 } from './broadcast-page.js';
 import { parseBroadcastButtons, sendTelegramBroadcast, cacheTelegramPhotoFileId } from '../../shared/telegram-api.js';
 import {
+  appendUtmToBroadcastMarkup,
+  parseBroadcastUtm,
+} from '../../shared/broadcast-utm.js';
+import {
   cancelBroadcastCampaign,
   pauseBroadcastCampaign,
   resumeBroadcastCampaign,
@@ -884,13 +888,29 @@ export function createAdminRouter() {
                 { value: 'no', label: 'Нет' },
               ], filters.hasCode)}
             </label>
-            <label class="export-field">
+            <label class="export-field" data-filter="users">
               <span>Визитка опубликована</span>
               ${exportSelect('visit_card', [
                 { value: '', label: 'Все' },
                 { value: 'yes', label: 'Да' },
                 { value: 'no', label: 'Нет' },
               ], filters.visitCard)}
+            </label>
+            <label class="export-field" data-filter="users">
+              <span>Метка ?start=</span>
+              <input type="search" name="start_payload" value="${esc(filters.startPayload)}" placeholder="vk_march, site_main…">
+            </label>
+            <label class="export-field" data-filter="users">
+              <span>Есть метку</span>
+              ${exportSelect('has_start_payload', [
+                { value: '', label: 'Все' },
+                { value: 'yes', label: 'Да (любая из истории)' },
+                { value: 'no', label: 'Нет (органика)' },
+              ], filters.hasStartPayload)}
+            </label>
+            <label class="export-field" data-filter="users">
+              <span>Сортировка</span>
+              ${exportSelect('user_sort', exportQueries.USER_EXPORT_SORT_OPTIONS, filters.userSortOrder)}
             </label>
           `,
             { filter: 'users visit_cards' },
@@ -1045,13 +1065,20 @@ export function createAdminRouter() {
 
   function parseBroadcastFormBody(body, file = null) {
     const photoRef = resolveBroadcastPhoto(body, file);
+    const buttonUtm = parseBroadcastUtm(body);
+    const replyMarkup = appendUtmToBroadcastMarkup(
+      parseBroadcastButtons(body.buttons_text),
+      buttonUtm,
+    );
+
     return {
       name: String(body.name ?? '').trim(),
       messageText: String(body.message_text ?? '').trim(),
       photoUrl: photoRef,
       photoLocal: isLocalPhotoRef(photoRef) ? photoRef : String(body.photo_local ?? '').trim(),
       buttonsText: String(body.buttons_text ?? ''),
-      replyMarkup: parseBroadcastButtons(body.buttons_text),
+      buttonUtm,
+      replyMarkup,
       filters: broadcastQueries.parseAudienceFilters(body),
     };
   }
@@ -1061,6 +1088,11 @@ export function createAdminRouter() {
       ...body,
       photo_url: parsed.photoUrl || '',
       photo_local: parsed.photoLocal || '',
+      utm_source: parsed.buttonUtm?.utm_source ?? '',
+      utm_medium: parsed.buttonUtm?.utm_medium ?? '',
+      utm_campaign: parsed.buttonUtm?.utm_campaign ?? '',
+      utm_content: parsed.buttonUtm?.utm_content ?? '',
+      utm_term: parsed.buttonUtm?.utm_term ?? '',
     };
   }
 

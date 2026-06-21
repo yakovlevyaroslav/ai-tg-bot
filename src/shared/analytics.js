@@ -3,6 +3,7 @@ import { getPool } from './db.js';
 export const EVENTS = {
   BOT_START: 'bot.start',
   BOT_RESTART: 'bot.restart',
+  ACQUISITION_START: 'acquisition.start',
   ONBOARDING_STEP: 'onboarding.step',
   ONBOARDING_COMPLETED: 'onboarding.completed',
   ONBOARDING_CONFIRM: 'onboarding.confirm',
