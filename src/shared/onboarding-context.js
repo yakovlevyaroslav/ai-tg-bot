@@ -145,11 +145,11 @@ export function buildAdminSkipCodeMessage(data) {
     `Имя: ${data.name} · ${data.gender_label}\n` +
     `Рождение: ${data.birth_date} ${data.birth_time}\n` +
     `Место: ${data.birth_place_label}\n\n` +
-    `${codes.astrologyCode} — астрология\n` +
+    `${codes.astrologyCode} — Астрология\n` +
     `${codes.humanDesignCode} — Human Design\n` +
-    `${codes.numerologyCode} — нумерология\n` +
+    `${codes.numerologyCode} — Нумерология\n` +
     `${codes.sucaiCode} — Сюцай\n` +
-    `${codes.jyotishCode} — ведическая астрология (Джойтиш)\n\n` +
+    `${codes.jyotishCode} — Ведическая астрология (Джойтиш)\n\n` +
     `Ответы на вопросы будут строиться на этих данных.`
   );
 }
