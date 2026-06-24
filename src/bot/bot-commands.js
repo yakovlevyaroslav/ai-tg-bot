@@ -18,15 +18,18 @@ const ADMIN_COMMANDS = [
 ];
 
 const REPLY_KEYBOARD_EXCLUDED_COMMANDS = new Set(['start', 'restart']);
+const ADMIN_REPLY_KEYBOARD_EXCLUDED_COMMANDS = new Set(['balance', 'help']);
 
 export function getCommandsForUser(telegramId) {
   return isAdminTelegramId(telegramId) ? ADMIN_COMMANDS : USER_COMMANDS;
 }
 
 export function getReplyKeyboardCommandsForUser(telegramId) {
-  return getCommandsForUser(telegramId).filter(
-    (item) => !REPLY_KEYBOARD_EXCLUDED_COMMANDS.has(item.command),
-  );
+  const excluded = isAdminTelegramId(telegramId)
+    ? new Set([...REPLY_KEYBOARD_EXCLUDED_COMMANDS, ...ADMIN_REPLY_KEYBOARD_EXCLUDED_COMMANDS])
+    : REPLY_KEYBOARD_EXCLUDED_COMMANDS;
+
+  return getCommandsForUser(telegramId).filter((item) => !excluded.has(item.command));
 }
 
 async function resetChatMenuButton(telegram, telegramId = null) {
