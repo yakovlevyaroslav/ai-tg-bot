@@ -1,7 +1,7 @@
 import { Markup } from 'telegraf';
 import * as db from '../shared/db.js';
 import { canOpenAsWebApp, canOpenMenuAsUrl, WEB_APP_MENU_TEXT } from '../shared/visit-card.js';
-import { getCommandsForUser } from './bot-commands.js';
+import { getReplyKeyboardCommandsForUser } from './bot-commands.js';
 import { resolveUserMenuUrl } from './menu-url.js';
 
 const COMMAND_BUTTON_LABELS = {
@@ -21,7 +21,7 @@ const LABEL_TO_COMMAND = Object.fromEntries(
 const keyboardState = new Map();
 
 function keyboardFingerprint(telegramId, menuUrl = null) {
-  const commands = getCommandsForUser(telegramId)
+  const commands = getReplyKeyboardCommandsForUser(telegramId)
     .map((item) => item.command)
     .join(',');
   const menuPart =
@@ -38,7 +38,7 @@ export function getCommandForReplyLabel(text) {
 }
 
 export function buildCommandReplyKeyboard(telegramId, menuUrl = null) {
-  const labels = getCommandsForUser(telegramId)
+  const labels = getReplyKeyboardCommandsForUser(telegramId)
     .map((item) => COMMAND_BUTTON_LABELS[item.command])
     .filter(Boolean);
 

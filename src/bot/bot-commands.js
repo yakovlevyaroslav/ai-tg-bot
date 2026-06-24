@@ -1,15 +1,9 @@
 import { isAdminTelegramId } from '../shared/pricing.js';
-import {
-  buildOnboardingPageUrl,
-  canOpenAsWebApp,
-  WEB_APP_MENU_TEXT,
-} from '../shared/visit-card.js';
-import { resolveUserMenuUrl } from './menu-url.js';
 
 const USER_COMMANDS = [
   { command: 'start', description: 'Главное меню' },
-  { command: 'balance', description: 'Баланс вопросов' },
   { command: 'questions', description: 'Задать вопрос' },
+  { command: 'balance', description: 'Баланс вопросов' },
   { command: 'restart', description: 'Сбросить и начать заново' },
 ];
 
@@ -23,24 +17,21 @@ const ADMIN_COMMANDS = [
   { command: 'skip_onboarding', description: 'Пропустить анкету (админ)' },
 ];
 
+const REPLY_KEYBOARD_EXCLUDED_COMMANDS = new Set(['start', 'restart']);
+
 export function getCommandsForUser(telegramId) {
   return isAdminTelegramId(telegramId) ? ADMIN_COMMANDS : USER_COMMANDS;
 }
 
-async function syncWebAppMenuButton(telegram, telegramId = null, userId = null) {
-  const menuUrl =
-    userId != null ? await resolveUserMenuUrl(userId) : buildOnboardingPageUrl();
+export function getReplyKeyboardCommandsForUser(telegramId) {
+  return getCommandsForUser(telegramId).filter(
+    (item) => !REPLY_KEYBOARD_EXCLUDED_COMMANDS.has(item.command),
+  );
+}
 
-  if (!canOpenAsWebApp(menuUrl)) {
-    return;
-  }
-
+async function resetChatMenuButton(telegram, telegramId = null) {
   const payload = {
-    menu_button: {
-      type: 'web_app',
-      text: WEB_APP_MENU_TEXT,
-      web_app: { url: menuUrl },
-    },
+    menu_button: { type: 'default' },
   };
 
   if (telegramId != null) {
@@ -61,7 +52,7 @@ export async function syncUserBotCommands(telegram, telegramId, userId = null) {
     scope: { type: 'chat', chat_id: Number(telegramId) },
   });
 
-  await syncWebAppMenuButton(telegram, telegramId, userId);
+  await resetChatMenuButton(telegram, telegramId);
 }
 
 export async function setupDefaultBotCommands(telegram) {
@@ -69,5 +60,5 @@ export async function setupDefaultBotCommands(telegram) {
     scope: { type: 'all_private_chats' },
   });
 
-  await syncWebAppMenuButton(telegram);
+  await resetChatMenuButton(telegram);
 }
