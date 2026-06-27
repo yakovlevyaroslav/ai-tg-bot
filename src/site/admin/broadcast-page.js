@@ -309,6 +309,7 @@ function renderBroadcastButtonsHelp() {
           <li><strong>Несколько кнопок в ряду</strong> — разделитель <code>||</code> (пробелы необязательны).</li>
           <li><strong>Ссылка:</strong> <code>Текст на кнопке => https://адрес</code></li>
           <li><strong>Действие в боте:</strong> <code>Текст на кнопке => callback:код_действия</code></li>
+          <li><strong>Сразу ответ на вопрос:</strong> <code>Текст => question:Текст вопроса для AI</code> — бот ответит без подтверждения (нужна анкета).</li>
           <li>Можно писать <code>Текст | https://…</code> — сработает так же, как <code>=&gt;</code>.</li>
           <li>Callback без префикса тоже принимается: <code>Текст => post:tariffs</code> (= <code>callback:post:tariffs</code>).</li>
           <li>Лимит Telegram: до <strong>64 символов</strong> в <code>callback:…</code>, до <strong>8 кнопок</strong> в ряд.</li>
@@ -318,8 +319,26 @@ function renderBroadcastButtonsHelp() {
         <h3 class="broadcast-help-title">Примеры для копирования</h3>
         <pre class="broadcast-preview">❓ Задать вопрос => callback:post:questions || 📋 Тарифы => callback:post:tariffs
 ✍️ Свой вопрос => callback:post:questions:custom || 🔥 Популярные => callback:post:questions:popular
+✨ Предназначение => question:В чём моё предназначение по коду личности?
+💼 Карьера => question:В какой сфере работы я реализуюсь лучше всего?
 🪪 Мой код личности => callback:post:menu:open
 🌐 Сайт => ${site}</pre>
+
+        <h3 class="broadcast-help-title">Кнопки с готовым вопросом (сразу ответ)</h3>
+        <p class="muted-text">
+          Формат: <code>Текст кнопки => question:…</code>. Текст вопроса может быть любой длины — в Telegram уходит короткий код.
+          Пользователь должен пройти анкету. С баланса списывается 1 вопрос, как при обычном запросе к AI.
+        </p>
+        <div class="table-wrap">
+          <table class="broadcast-help-table">
+            <thead><tr><th>Пример для поля «Кнопки»</th><th>Что произойдёт</th></tr></thead>
+            <tbody>
+              <tr><td>${helpCode('✨ Предназначение => question:В чём моё предназначение?')}</td><td class="muted-text">мгновенный ответ AI</td></tr>
+              <tr><td>${helpCode('❤️ Отношения => question:Какой тип людей мне подходит?')}</td><td class="muted-text">мгновенный ответ AI</td></tr>
+              <tr><td>${helpCode('💼 Работа => question:Куда двигаться в карьере?')}</td><td class="muted-text">мгновенный ответ AI</td></tr>
+            </tbody>
+          </table>
+        </div>
 
         <h3 class="broadcast-help-title">UTM для ссылок на сайт</h3>
         <p class="muted-text">
@@ -539,6 +558,7 @@ export function renderBroadcastFormPage({ query = {}, campaigns = [], flash = ''
           <strong>Кратко:</strong> строка = ряд кнопок; в ряду — через <code>||</code>.
           Ссылка: <code>Текст => https://…</code>.
           Бот: <code>Текст => callback:post:tariffs</code> (или без префикса <code>callback:</code>).
+          <strong>Сразу ответ:</strong> <code>Текст => question:Ваш вопрос</code>.
           UTM добавляется только к <strong>URL-кнопкам</strong> (сайт, не <code>t.me?start=</code>).
           ${esc(testHint)}.
         </p>

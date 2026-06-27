@@ -197,10 +197,10 @@ export async function sendPostOnboardingOffer(ctx, userId, { withIntro = false }
   }
 }
 
-export async function sendTariffsIntro(ctx, userId = null) {
+export async function sendTariffsIntro(ctx, userId = null, { source = 'post_onboarding' } = {}) {
   const telegramId = ctx.from?.id;
   if (userId) {
-    trackEvent(userId, EVENTS.TARIFFS_OPENED, { source: 'post_onboarding' });
+    trackEvent(userId, EVENTS.TARIFFS_OPENED, { source });
   }
   await ctx.reply(formatTariffsMessage(telegramId), tariffsInlineKeyboard(telegramId));
 }

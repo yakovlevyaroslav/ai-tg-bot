@@ -23,6 +23,7 @@ import {
   renderBroadcastStatusPage,
 } from './broadcast-page.js';
 import { parseBroadcastButtons, sendTelegramBroadcast, cacheTelegramPhotoFileId } from '../../shared/telegram-api.js';
+import { resolveBroadcastButtons } from '../../shared/broadcast/button-questions.js';
 import {
   appendUtmToBroadcastMarkup,
   parseBroadcastUtm,
@@ -1069,11 +1070,11 @@ export function createAdminRouter() {
     return `<div class="flash ${cls}">${esc(message)}</div>`;
   }
 
-  function parseBroadcastFormBody(body, file = null) {
+  async function parseBroadcastFormBody(body, file = null) {
     const photoRef = resolveBroadcastPhoto(body, file);
     const buttonUtm = parseBroadcastUtm(body);
     const replyMarkup = appendUtmToBroadcastMarkup(
-      parseBroadcastButtons(body.buttons_text),
+      await resolveBroadcastButtons(body.buttons_text),
       buttonUtm,
     );
 
@@ -1140,7 +1141,7 @@ export function createAdminRouter() {
   router.post('/broadcast', broadcastUploadMiddleware, async (req, res) => {
     const uploadError = getUploadErrorMessage(req);
     const action = String(req.body.action ?? '');
-    const parsed = parseBroadcastFormBody(req.body, req.file ?? null);
+    const parsed = await parseBroadcastFormBody(req.body, req.file ?? null);
     const campaigns = await broadcastQueries.listBroadcastCampaigns(15);
     const formQuery = formBodyToQuery(req.body, parsed);
 

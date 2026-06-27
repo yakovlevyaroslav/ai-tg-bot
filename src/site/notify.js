@@ -1,5 +1,5 @@
 import { buildPostActionsKeyboard } from '../bot/menu-url.js';
-import { formatQuestions } from '../shared/requests-format.js';
+import { formatBalanceCredit, formatBalanceRemaining } from '../shared/requests-format.js';
 import { sendTelegramMessage } from '../shared/telegram-api.js';
 
 /** Уже отправленные уведомления (in-memory, защита от дублей poll/webhook). */
@@ -8,8 +8,8 @@ const notifiedPaymentCodes = new Set();
 export function buildPaymentSuccessText(result) {
   return (
     `✅ Оплата прошла успешно!\n\n` +
-    `+${formatQuestions(result.pending.credits_amount)}\n` +
-    `Осталось: ${formatQuestions(result.balanceAfter)}`
+    `${formatBalanceCredit(result.pending.credits_amount)}\n` +
+    `${formatBalanceRemaining(result.balanceAfter)}`
   );
 }
 

@@ -15,7 +15,7 @@ import { syncUserBotCommands } from './bot-commands.js';
 import { isAdmin } from './admin-commands.js';
 import { checkCooldown } from './rate-limit.js';
 import { formatPackagesInline } from '../shared/pricing.js';
-import { formatQuestions } from '../shared/requests-format.js';
+import { formatQuestions, formatBalanceChangeFooter, formatBalanceCredit, formatBalanceRemaining } from '../shared/requests-format.js';
 import {
   sendTopupMenu,
   handleTopupCallback,
@@ -44,6 +44,7 @@ import {
   getPopularSubquestion,
   sendPostOnboardingMenu,
   POST_ONBOARDING_TEXT,
+  sendTariffsIntro,
 } from './post-onboarding.js';
 import { handleMenuOpen, resolveUserMenuUrl } from './menu-url.js';
 import {
@@ -55,6 +56,7 @@ import {
   handleQuestionConfirmReminder,
 } from './question-flow-handlers.js';
 import { cancelIdleNudge, getIdleNudgeTopicById } from './idle-nudge.js';
+import { getBroadcastButtonQuestion } from '../shared/broadcast/button-questions.js';
 import { sendQuestionThinkingPrelude } from './question-flow.js';
 import {
   ANSWER_FOLLOWUP_TEXT,
@@ -71,14 +73,38 @@ function splitMessage(text) {
 }
 
 function formatBalanceLine(balance, charged = null) {
-  if (charged !== null) {
-    return `\n\n−${formatQuestions(charged)} · осталось: ${formatQuestions(balance)}`;
-  }
-  return `\n\nОсталось: ${formatQuestions(balance)}`;
+  return formatBalanceChangeFooter(balance, charged);
 }
 
 function shouldOfferTariffs(balance) {
   return balance < config.lowTokensTariffsThreshold;
+}
+
+async function refuseQuestionForInsufficientBalance(ctx, userId, balance, required) {
+  trackEvent(userId, EVENTS.QUESTION_INSUFFICIENT_BALANCE, {
+    balance,
+    required,
+  });
+
+  const text =
+    balance <= 0
+      ? 'На балансе не осталось вопросов — без пополнения ответ получить не получится.'
+      : `Недостаточно вопросов: осталось ${formatQuestions(balance)}, нужно ${formatQuestions(required)}.`;
+
+  await ctx.reply(text);
+  await sendTariffsIntro(ctx, userId, { source: 'insufficient_balance' });
+}
+
+async function guardQuestionCredits(ctx, userId) {
+  const cost = billing.estimateMessageCost();
+  const balance = await billing.getBalance(userId);
+
+  if (balance < cost) {
+    await refuseQuestionForInsufficientBalance(ctx, userId, balance, cost);
+    return false;
+  }
+
+  return true;
 }
 
 async function registerUser(ctx, { syncKeyboard = true } = {}) {
@@ -114,7 +140,10 @@ async function sendBalance(ctx, userId = null) {
 
   if (yookassaSync) {
     text =
-      `✅ Зачислено +${formatQuestions(yookassaSync.pending.credits_amount)} после оплаты\n\n` + text;
+      `✅ Зачислено после оплаты\n\n` +
+      `${formatBalanceCredit(yookassaSync.pending.credits_amount)}\n` +
+      `${formatBalanceRemaining(balance)}\n\n` +
+      text;
   }
 
   await ctx.reply(text, balanceTariffsInlineKeyboard());
@@ -165,14 +194,7 @@ async function handleChatMessage(ctx, userId, text) {
     chargeResult = await billing.charge(userId, cost, { reason: 'message' });
   } catch (err) {
     if (err.code === 'INSUFFICIENT_CREDITS') {
-      trackEvent(userId, EVENTS.QUESTION_INSUFFICIENT_BALANCE, {
-        balance: err.balance,
-        required: err.required,
-      });
-      await ctx.reply(
-        getUserErrorMessage(err),
-        balanceTariffsInlineKeyboard(),
-      );
+      await refuseQuestionForInsufficientBalance(ctx, userId, err.balance, err.required);
       return;
     }
     throw err;
@@ -414,8 +436,34 @@ export function createBot() {
 
     trackEvent(userId, EVENTS.IDLE_NUDGE_TOPIC, { topic_id: topic.id });
     await ctx.answerCbQuery('Слушаю код…');
+    if (!(await guardQuestionCredits(ctx, userId))) {
+      return;
+    }
     await sendQuestionThinkingPrelude(ctx);
     await handleChatMessage(ctx, userId, topic.prompt);
+  });
+
+  bot.action(/^bcq:(\d+)$/, async (ctx) => {
+    const { userId } = await registerUser(ctx);
+    const questionText = await getBroadcastButtonQuestion(ctx.match[1]);
+
+    if (!questionText) {
+      await ctx.answerCbQuery('Вопрос не найден');
+      return;
+    }
+
+    const profile = await db.getUserProfile(userId);
+    if (!profile?.onboarding_completed) {
+      await ctx.answerCbQuery('Сначала пройдите анкету');
+      return;
+    }
+
+    await ctx.answerCbQuery('Слушаю код…');
+    if (!(await guardQuestionCredits(ctx, userId))) {
+      return;
+    }
+    await sendQuestionThinkingPrelude(ctx);
+    await handleChatMessage(ctx, userId, questionText);
   });
 
   bot.action(/^post:questions(?::([\w]+))?$/, async (ctx) => {
@@ -470,6 +518,9 @@ export function createBot() {
     }
 
     await ctx.answerCbQuery('Слушаю код…');
+    if (!(await guardQuestionCredits(ctx, userId))) {
+      return;
+    }
     await sendQuestionThinkingPrelude(ctx);
     await handleChatMessage(ctx, userId, prompt);
   });

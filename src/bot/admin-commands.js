@@ -1,7 +1,7 @@
 import { config } from '../shared/config.js';
 import * as billing from '../shared/billing.js';
 import * as db from '../shared/db.js';
-import { formatRequests } from '../shared/requests-format.js';
+import { formatBalanceCredit, formatBalanceRemaining } from '../shared/requests-format.js';
 
 export function isAdmin(telegramId) {
   return config.adminTelegramIds.includes(Number(telegramId));
@@ -49,7 +49,7 @@ export async function handleGrantCommand(ctx) {
   });
 
   await ctx.reply(
-    `Начислено ${formatRequests(amount)} пользователю ${targetTelegramId}.\n` +
-      `Осталось: ${formatRequests(result.balanceAfter)}`,
+    `${formatBalanceCredit(amount)} пользователю ${targetTelegramId}.\n` +
+      formatBalanceRemaining(result.balanceAfter),
   );
 }

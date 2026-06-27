@@ -216,6 +216,14 @@ export function parseBroadcastButtons(text) {
             ? rawAction.slice('callback:'.length)
             : rawAction;
 
+          if (callbackData.startsWith('question:')) {
+            const questionText = callbackData.slice('question:'.length).trim();
+            if (!questionText) {
+              return null;
+            }
+            return { text: rawLabel, callback_data: `question:${questionText}` };
+          }
+
           if (callbackData.length > 64) {
             return null;
           }

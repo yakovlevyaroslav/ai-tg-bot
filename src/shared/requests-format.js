@@ -20,6 +20,30 @@ export function formatQuestions(n) {
   return `${Number(n)} ${pluralQuestions(n)}`;
 }
 
+/** Префикс строк о изменении баланса (списание / начисление) */
+export const BALANCE_CHANGE_PREFIX = '✨';
+
+export function formatBalanceRemaining(balance) {
+  return `${BALANCE_CHANGE_PREFIX} Осталось: ${formatQuestions(balance)}`;
+}
+
+export function formatBalanceCredit(amount) {
+  return `${BALANCE_CHANGE_PREFIX} +${formatQuestions(amount)}`;
+}
+
+export function formatBalanceDeduction(charged, balanceAfter) {
+  return `${BALANCE_CHANGE_PREFIX} −${formatQuestions(charged)} · осталось: ${formatQuestions(balanceAfter)}`;
+}
+
+/** Подпись под ответом бота или в сообщении об ошибке */
+export function formatBalanceChangeFooter(balanceAfter, charged = null) {
+  const line =
+    charged !== null
+      ? formatBalanceDeduction(charged, balanceAfter)
+      : formatBalanceRemaining(balanceAfter);
+  return `\n\n${line}`;
+}
+
 /** @deprecated используйте formatQuestions */
 export function formatTokens(n) {
   return formatQuestions(n);

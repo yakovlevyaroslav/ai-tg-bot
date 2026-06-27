@@ -6,7 +6,7 @@ import {
   getPackagePresentation,
   resolveTopupPackage,
 } from '../shared/pricing.js';
-import { formatQuestions } from '../shared/requests-format.js';
+import { formatQuestions, formatBalanceCredit, formatBalanceRemaining } from '../shared/requests-format.js';
 import {
   startTopupPayment,
   syncUserYookassaPayments,
@@ -97,8 +97,7 @@ export async function handleTopupAmount(ctx, userId, rub) {
   if (synced.length > 0) {
     const last = synced[synced.length - 1];
     await ctx.reply(
-      `✅ Оплата прошла!\n\n+${formatQuestions(last.pending.credits_amount)}\n` +
-        `Осталось: ${formatQuestions(last.balanceAfter)}`,
+      `✅ Оплата прошла!\n\n${formatBalanceCredit(last.pending.credits_amount)}\n${formatBalanceRemaining(last.balanceAfter)}`,
     );
     return;
   }

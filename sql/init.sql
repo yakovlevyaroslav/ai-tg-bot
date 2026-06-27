@@ -214,3 +214,9 @@ CREATE INDEX IF NOT EXISTS idx_broadcast_deliveries_campaign_status
 
 ALTER TABLE broadcast_campaigns
   ADD COLUMN IF NOT EXISTS photo_file_id TEXT;
+
+CREATE TABLE IF NOT EXISTS broadcast_button_questions (
+  id BIGSERIAL PRIMARY KEY,
+  question_text TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
