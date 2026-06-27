@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { config } from '../shared/config.js';
-import { escapeHtml, renderSitePage } from './html.js';
+import { escapeHtml } from './html.js';
 
 const promptsDir = join(dirname(fileURLToPath(import.meta.url)), '../../prompts');
 const templateCache = new Map();
@@ -91,19 +91,24 @@ export function renderLegalBody(text) {
   return `<div class="prose">${parts.join('\n')}</div>`;
 }
 
-export function renderLegalPage({ title, description, activeNav, customFile, defaultFilename, replacements }) {
+export function buildLegalPageData({
+  title,
+  description,
+  customFile,
+  defaultFilename,
+  replacements,
+}) {
   const template = fillLegalTemplate(
     loadLegalTemplate(customFile, defaultFilename),
     replacements,
   );
-  const bodyHtml = renderLegalBody(template);
 
-  return renderSitePage({
+  return {
     title,
     description,
-    activeNav,
-    bodyHtml,
-  });
+    siteName: config.publicSiteName,
+    bodyHtml: renderLegalBody(template),
+  };
 }
 
 export function baseLegalReplacements({ privacyUrl, cookiesUrl, updatedDate }) {

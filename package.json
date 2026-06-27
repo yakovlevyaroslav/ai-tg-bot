@@ -10,6 +10,9 @@
     "dev": "NODE_ENV=development node --env-file=.env --watch src/index.js",
     "dev:bot": "NODE_ENV=development node --env-file=.env.bot --watch src/bot/index.js",
     "dev:site": "NODE_ENV=development node --env-file=.env.site --watch src/site/index.js",
+    "dev:frontend": "vite --config frontend/vite.config.js",
+    "build:frontend:dev": "vite build --config frontend/vite.config.js --mode development",
+    "build:frontend": "vite build --config frontend/vite.config.js --mode production",
     "db:init": "node --env-file=.env.bot scripts/init-db.js"
   },
   "engines": {
@@ -23,5 +26,10 @@
     "pg": "^8.16.0",
     "telegraf": "^4.16.3",
     "undici": "^6.26.0"
+  },
+  "devDependencies": {
+    "reset-css": "^5.0.2",
+    "sass": "^1.89.2",
+    "vite": "^6.3.5"
   }
 }

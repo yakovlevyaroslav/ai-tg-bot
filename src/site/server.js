@@ -1,13 +1,37 @@
 import express from 'express';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { existsSync } from 'node:fs';
 import { config } from '../shared/config.js';
 import { createAdminRouter } from './admin/routes.js';
 import { createYookassaWebhookHandler } from '../shared/yookassa/webhook.js';
-import { renderLandingPage } from './landing.js';
-import { renderPrivacyPage } from './privacy.js';
-import { renderCookiesPage } from './cookies.js';
-import { renderVisitCardPage, renderVisitCardNotFoundPage } from './visit-card-page.js';
-import { renderOnboardingStubPage } from './onboarding-page.js';
-import { getPublishedVisitCard } from '../shared/db.js';
+import { createPublicApiRouter } from './public-api.js';
+
+const distPath = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '../../dist',
+);
+
+const publicPages = {
+  '/': 'landing/landing.html',
+  '/privacy': 'privacy/privacy.html',
+  '/cookies': 'cookies/cookies.html',
+  '/onboarding': 'onboarding/onboarding.html',
+};
+
+function sendBuiltPage(res, pagePath) {
+  const absolute = path.join(distPath, pagePath);
+  if (!existsSync(absolute)) {
+    res
+      .status(503)
+      .type('html')
+      .send(
+        'Frontend не собран. Запустите: npm run build:frontend',
+      );
+    return;
+  }
+  res.sendFile(absolute);
+}
 
 function basicAuth(req, res, next) {
   const header = req.headers.authorization;
@@ -47,35 +71,7 @@ export function startSiteServer() {
   app.get('/favicon.ico', (_req, res) => res.status(204).end());
   app.get('/health', (_req, res) => res.json({ ok: true }));
 
-  app.get('/', (_req, res) => {
-    res.type('html').send(renderLandingPage());
-  });
-
-  app.get('/privacy', (_req, res) => {
-    res.type('html').send(renderPrivacyPage());
-  });
-
-  app.get('/cookies', (_req, res) => {
-    res.type('html').send(renderCookiesPage());
-  });
-
-  app.get('/onboarding', (_req, res) => {
-    res.type('html').send(renderOnboardingStubPage());
-  });
-
-  app.get('/code/:code', async (req, res) => {
-    try {
-      const card = await getPublishedVisitCard(req.params.code);
-      if (!card) {
-        res.status(404).type('html').send(renderVisitCardNotFoundPage());
-        return;
-      }
-      res.type('html').send(renderVisitCardPage(card));
-    } catch (err) {
-      console.error('[site] visit card error:', err?.message ?? err);
-      res.status(500).send('Ошибка загрузки страницы');
-    }
-  });
+  app.use('/api', createPublicApiRouter());
 
   app.post(
     config.yookassaWebhookPath,
@@ -86,9 +82,24 @@ export function startSiteServer() {
     app.use('/admin', basicAuth, createAdminRouter());
   }
 
+  if (existsSync(distPath)) {
+    app.use(express.static(distPath, { index: false }));
+  }
+
+  for (const [route, pagePath] of Object.entries(publicPages)) {
+    app.get(route, (_req, res) => sendBuiltPage(res, pagePath));
+  }
+
+  app.get('/code/:code', (_req, res) => {
+    sendBuiltPage(res, 'visit-card/visit-card.html');
+  });
+
   const server = app.listen(config.adminWebPort, config.adminWebHost, () => {
     const host = config.adminWebHost === '0.0.0.0' ? 'localhost' : config.adminWebHost;
     console.log(`Site: http://${host}:${config.adminWebPort}/`);
+    if (!existsSync(distPath)) {
+      console.warn('[site] dist/ not found — run npm run build:frontend');
+    }
     if (config.adminWebEnabled) {
       console.log(`Admin panel: http://${host}:${config.adminWebPort}/admin`);
     }

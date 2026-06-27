@@ -1,0 +1,173 @@
+.badge {
+  display: inline-block;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent2);
+  border: 1px solid rgba(196, 163, 90, 0.35);
+  border-radius: 999px;
+  padding: 6px 12px;
+  margin-bottom: 20px;
+}
+
+h1 {
+  font-size: clamp(2rem, 5vw, 2.75rem);
+  line-height: 1.15;
+  margin-bottom: 16px;
+}
+
+h2 {
+  font-size: 1.25rem;
+  margin: 28px 0 12px;
+}
+
+.lead {
+  color: var(--muted);
+  font-size: 1.125rem;
+  margin-bottom: 28px;
+}
+
+.cards {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 28px;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 14px;
+  padding: 16px 18px;
+
+  strong {
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  span,
+  p {
+    color: var(--muted);
+    font-size: 0.95rem;
+  }
+}
+
+.steps {
+  counter-reset: step;
+  display: grid;
+  gap: 12px;
+  margin-bottom: 28px;
+}
+
+.step {
+  background: var(--card);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 14px;
+  padding: 16px 18px 16px 56px;
+  position: relative;
+
+  &::before {
+    counter-increment: step;
+    content: counter(step);
+    position: absolute;
+    left: 18px;
+    top: 16px;
+    width: 28px;
+    height: 28px;
+    border-radius: 999px;
+    background: rgba(124, 92, 255, 0.2);
+    color: #cfc4ff;
+    display: grid;
+    place-items: center;
+    font-size: 0.85rem;
+    font-weight: 700;
+  }
+
+  strong {
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  span {
+    color: var(--muted);
+    font-size: 0.95rem;
+  }
+}
+
+.cta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 28px 0;
+}
+
+.cta {
+  display: inline-block;
+  background: linear-gradient(135deg, var(--accent), #5a3fd4);
+  color: #fff;
+  text-decoration: none;
+  font-weight: 600;
+  padding: 14px 28px;
+  border-radius: 12px;
+  font-size: 1.05rem;
+  box-shadow: 0 8px 24px rgba(124, 92, 255, 0.35);
+
+  &:hover {
+    filter: brightness(1.08);
+  }
+}
+
+.cta-secondary {
+  display: inline-block;
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 600;
+  padding: 14px 22px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+
+  &:hover {
+    border-color: rgba(196, 163, 90, 0.35);
+  }
+}
+
+.tariffs {
+  background: var(--card);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 14px;
+  padding: 18px 20px;
+  margin-bottom: 8px;
+  white-space: pre-line;
+  color: var(--muted);
+}
+
+.prose {
+  p,
+  li {
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+
+  ul {
+    padding-left: 1.25rem;
+    margin-bottom: 12px;
+  }
+
+  h2 {
+    color: var(--text);
+  }
+
+  strong {
+    color: var(--text);
+  }
+}
+
+.page-loading {
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.page-error {
+  color: #f5a8a8;
+  font-size: 0.95rem;
+}

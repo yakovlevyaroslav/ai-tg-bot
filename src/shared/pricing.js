@@ -82,7 +82,7 @@ export function formatTariffsMessage(telegramId = null) {
   const freeQuestions =
     config.welcomeBonusRequests > 0
       ? `🎁 Бесплатно при регистрации: ${formatQuestions(config.welcomeBonusRequests)}`
-      : '🎁 Бесплатно при регистрации: 1 вопрос';
+      : '🎁 Бесплатно при регистрации: 2 вопроса';
 
   let publicIndex = 0;
   const packageLines = packages.map((pkg) => {

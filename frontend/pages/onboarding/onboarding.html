@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <!-- @include ../../shared/components/head/base.html -->
+    <!-- @include ../../shared/components/head/onboarding.html -->
+  </head>
+  <body data-page="onboarding">
+    <div class="wrap">
+      <!-- @include ../../shared/components/site-header.html -->
+
+      <main id="onboarding-page" class="is-hidden">
+        <p class="badge">Код личности</p>
+        <h1>Ваш код ждёт</h1>
+        <p class="lead" id="onboarding-lead"></p>
+
+        <div class="steps">
+          <div class="step">
+            <strong>Анкета</strong>
+            <span>Имя, пол, дата, время и место рождения — пара минут.</span>
+          </div>
+          <div class="step">
+            <strong>Код личности</strong>
+            <span>Единый 10-значный код и базовый разбор вашей карты.</span>
+          </div>
+          <div class="step">
+            <strong>Вопросы</strong>
+            <span>Задавайте свои вопросы — ответы опираются на ваш код.</span>
+          </div>
+        </div>
+
+        <div class="cta-row">
+          <a class="cta is-hidden" id="onboarding-cta" href="#">▶️ Пройти анкету</a>
+          <a class="cta-secondary" href="/">На главную</a>
+        </div>
+      </main>
+
+      <p class="page-loading" id="onboarding-loading">Загрузка…</p>
+      <p class="page-error is-hidden" id="onboarding-error"></p>
+
+      <!-- @include ../../shared/components/site-footer.html -->
+    </div>
+
+    <script type="module" src="../../shared/main.js"></script>
+  </body>
+</html>
