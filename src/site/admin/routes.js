@@ -48,9 +48,12 @@ import {
   exportFilterSection,
   formatDate,
   formatCredits,
+  formatStartPayloadLabel,
   layout,
   statCard,
   userLabel,
+  userTableAlias,
+  userTableName,
 } from './html.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -269,16 +272,17 @@ export function createAdminRouter() {
             (u) => `<tr>
           <td><a href="/admin/users/${u.id}">#${u.id}</a></td>
           <td><code>${esc(u.telegram_id)}</code></td>
-          <td>${esc(userLabel(u))}</td>
+          <td>${esc(userTableName(u))}</td>
+          <td>${esc(userTableAlias(u))}</td>
           <td>${esc(u.personality_code || '—')}</td>
           <td><strong>${formatCredits(u.credits)}</strong></td>
-          <td>${esc(u.messages_count)}</td>
-          <td>${u.welcome_bonus_granted ? '<span class="badge badge-success">да</span>' : '<span class="badge badge-muted">нет</span>'}</td>
+          <td>${formatCredits(u.questions_spent)}</td>
           <td>${formatDate(u.created_at)}</td>
+          <td>${esc(formatStartPayloadLabel(u.start_payload))}</td>
         </tr>`,
           )
           .join('')
-      : `<tr><td colspan="8" class="empty">Пользователи не найдены</td></tr>`;
+      : `<tr><td colspan="9" class="empty">Пользователи не найдены</td></tr>`;
 
     const prev = page > 1 ? `/admin/users?page=${page - 1}&search=${encodeURIComponent(search)}` : null;
     const next = page < pages ? `/admin/users?page=${page + 1}&search=${encodeURIComponent(search)}` : null;
@@ -288,7 +292,7 @@ export function createAdminRouter() {
       <h1 class="page-title">Пользователи</h1>
       <p class="page-subtitle">Всего: ${total}</p>
       <form class="toolbar" method="get" action="/admin/users">
-        <input type="search" name="search" placeholder="ID, telegram, username, имя…" value="${esc(search)}" style="min-width:240px">
+        <input type="search" name="search" placeholder="ID, telegram, имя, метка, organic…" value="${esc(search)}" style="min-width:240px">
         <button type="submit" class="btn">Найти</button>
         ${search ? `<a href="/admin/users" class="btn btn-ghost">Сбросить</a>` : ''}
       </form>
@@ -297,8 +301,8 @@ export function createAdminRouter() {
           <table>
             <thead>
               <tr>
-                <th>ID</th><th>Telegram</th><th>Имя</th><th>Код личности</th><th>Вопросов</th>
-                <th>Сообщ.</th><th>Бонус</th><th>Регистрация</th>
+                <th>ID</th><th>Telegram id</th><th>Имя</th><th>Alias</th><th>Код личности</th><th>Баланс</th>
+                <th>Вопросы</th><th>Регистрация</th><th>Метка</th>
               </tr>
             </thead>
             <tbody>${rows}</tbody>
@@ -365,7 +369,7 @@ export function createAdminRouter() {
       <div class="detail-grid">
         <div class="detail-item"><label>Код личности</label><span>${esc(user.personality_code || '—')}</span></div>
         <div class="detail-item"><label>Осталось вопросов</label><span>${formatCredits(user.credits)}</span></div>
-        <div class="detail-item"><label>Сообщений</label><span>${esc(user.messages_count)}</span></div>
+        <div class="detail-item"><label>Потрачено вопросов</label><span>${formatCredits(user.questions_spent)}</span></div>
         <div class="detail-item"><label>Регистрация</label><span>${formatDate(user.created_at)}</span></div>
         <div class="detail-item"><label>Стартовый бонус</label><span>${user.welcome_bonus_granted ? 'получен' : 'нет'}</span></div>
       </div>

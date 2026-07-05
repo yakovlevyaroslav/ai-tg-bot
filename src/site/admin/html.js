@@ -42,6 +42,39 @@ export function userLabel(user) {
   return name || `ID ${user.telegram_id}`;
 }
 
+/** Имя в таблице пользователей: из анкеты, иначе first_name Telegram */
+export function userTableName(user) {
+  if (!user) return '—';
+  const onboardingName = String(user.onboarding_name ?? '').trim();
+  if (onboardingName) {
+    return onboardingName;
+  }
+  const telegramName = String(user.first_name ?? '').trim();
+  return telegramName || '—';
+}
+
+/** @username в таблице пользователей */
+export function userTableAlias(user) {
+  if (!user?.username) {
+    return '—';
+  }
+  return `@${user.username}`;
+}
+
+/** Метка ?start= в таблице пользователей, если источник неизвестен */
+export const ORGANIC_START_LABEL = 'organic';
+
+export function formatStartPayloadLabel(startPayload) {
+  const value = String(startPayload ?? '').trim();
+  return value || ORGANIC_START_LABEL;
+}
+
+/** Поиск пользователей без метки ?start= */
+export function isOrganicStartPayloadSearch(term) {
+  const normalized = String(term ?? '').trim().toLowerCase();
+  return normalized === ORGANIC_START_LABEL || normalized === 'органика';
+}
+
 /** Блок полей фильтра с заголовком; `filter` — типы выгрузки через пробел (для show/hide) */
 export function exportFilterSection(title, gridHtml, { filter } = {}) {
   const filterAttr = filter ? ` data-filter="${esc(filter)}"` : '';

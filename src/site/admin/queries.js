@@ -1,4 +1,5 @@
 import { getPool } from '../../shared/db.js';
+import { isOrganicStartPayloadSearch } from './html.js';
 
 const USERS_PER_PAGE = 25;
 const TX_PER_PAGE = 30;
@@ -29,12 +30,19 @@ export async function listUsers({ page = 1, search = '' }) {
   let where = '';
 
   if (search.trim()) {
-    params.push(`%${search.trim()}%`);
+    const term = search.trim();
+    params.push(`%${term}%`);
+    const organicClause = isOrganicStartPayloadSearch(term)
+      ? `OR COALESCE(NULLIF(TRIM(u.start_payload), ''), '') = ''`
+      : '';
     where = `WHERE (
       u.telegram_id::text ILIKE $1
       OR u.username ILIKE $1
       OR u.first_name ILIKE $1
+      OR u.onboarding_data->>'name' ILIKE $1
+      OR u.start_payload ILIKE $1
       OR u.id::text ILIKE $1
+      ${organicClause}
     )`;
   }
 
@@ -54,10 +62,14 @@ export async function listUsers({ page = 1, search = '' }) {
        u.first_name,
        u.welcome_bonus_granted,
        u.onboarding_completed,
+       NULLIF(TRIM(u.onboarding_data->>'name'), '') AS onboarding_name,
        u.onboarding_data->>'personality_code' AS personality_code,
+       NULLIF(TRIM(u.start_payload), '') AS start_payload,
        u.created_at,
        COALESCE(b.credits, 0)::bigint AS credits,
-       (SELECT COUNT(*)::int FROM messages m WHERE m.user_id = u.id) AS messages_count
+       COALESCE((
+         SELECT SUM(ue.credits_charged)::bigint FROM usage_events ue WHERE ue.user_id = u.id
+       ), 0) AS questions_spent
      FROM users u
      LEFT JOIN balances b ON b.user_id = u.id
      ${where}
@@ -80,9 +92,13 @@ export async function getUserById(userId) {
        u.welcome_bonus_granted,
        u.onboarding_completed,
        u.onboarding_data,
+       NULLIF(TRIM(u.onboarding_data->>'name'), '') AS onboarding_name,
        u.onboarding_data->>'personality_code' AS personality_code,
        u.created_at,
        COALESCE(b.credits, 0)::bigint AS credits,
+       COALESCE((
+         SELECT SUM(ue.credits_charged)::bigint FROM usage_events ue WHERE ue.user_id = u.id
+       ), 0) AS questions_spent,
        (SELECT COUNT(*)::int FROM messages m WHERE m.user_id = u.id) AS messages_count
      FROM users u
      LEFT JOIN balances b ON b.user_id = u.id
