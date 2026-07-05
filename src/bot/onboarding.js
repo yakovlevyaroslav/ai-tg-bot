@@ -21,7 +21,7 @@ import { getUserErrorMessage } from '../shared/errors.js';
 import { buildWelcomeText, WELCOME_MESSAGE_PARSE_MODE } from '../shared/welcome-message.js';
 import { replyFormatted } from '../shared/telegram-format.js';
 import { EVENTS, trackEvent } from '../shared/analytics.js';
-import { isStartCommand, getAcquirableStartPayload } from '../shared/start-payload.js';
+import { opensQuestionsMenuOnStart, getAcquirableStartPayload } from '../shared/start-payload.js';
 
 const MESSAGES = {
   askName:
@@ -318,7 +318,7 @@ export async function handleStartCommand(ctx, userId, { startPayload = '' } = {}
   const profile = await db.getUserProfile(userId);
 
   if (profile?.onboarding_completed) {
-    if (isStartCommand(startPayload)) {
+    if (opensQuestionsMenuOnStart(startPayload)) {
       await sendQuestionsMenu(ctx);
       await syncCommandReplyKeyboardIfNeeded(ctx, userId);
       return;

@@ -1,6 +1,6 @@
 import { escapeHtml, renderSitePage } from './html.js';
 import { config } from '../shared/config.js';
-import { buildVisitCardCodeBreakdown, buildVisitCardPublicUrl, buildBotStartLink, BOT_START_QUESTIONS } from '../shared/visit-card.js';
+import { buildVisitCardCodeBreakdown, buildVisitCardPublicUrl, buildBotStartLink, VISIT_CARD_ASK_START_LABEL } from '../shared/visit-card.js';
 
 function telegramHtmlToWeb(content) {
   let html = escapeHtml(content);
@@ -214,7 +214,7 @@ export function renderVisitCardPage(card) {
   const breakdown = buildVisitCardCodeBreakdown(card.onboarding_data ?? {});
   const contentHtml = telegramHtmlToWeb(card.visit_card_content ?? '');
   const shareUrl = buildVisitCardPublicUrl(code);
-  const askBotLink = buildBotStartLink(BOT_START_QUESTIONS);
+  const askBotLink = buildBotStartLink(VISIT_CARD_ASK_START_LABEL);
 
   const breakdownHtml = breakdown
     .map(

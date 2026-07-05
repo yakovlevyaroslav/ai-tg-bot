@@ -17,7 +17,7 @@ export function buildOnboardingPageUrl() {
   return base ? `${base}/onboarding` : '/onboarding';
 }
 
-/** Deep link в бота: https://t.me/Bot?start=questions */
+/** Deep link в бота: https://t.me/Bot?start=site-bottom-btn */
 export function buildBotStartLink(startParam = '') {
   const base = config.publicBotLink?.replace(/\/$/, '');
   if (!base || base === 'https://t.me') {
@@ -30,7 +30,8 @@ export function buildBotStartLink(startParam = '') {
   return `${base}?start=${encodeURIComponent(param)}`;
 }
 
-export const BOT_START_QUESTIONS = 'questions';
+/** ?start= для кнопки «Задать вопрос» на публичной визитке */
+export const VISIT_CARD_ASK_START_LABEL = 'site-bottom-btn';
 
 /** Web App в Telegram требует HTTPS */
 export function canOpenAsWebApp(url) {
