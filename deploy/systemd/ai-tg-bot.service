@@ -13,6 +13,7 @@ StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=ai-tg-bot
 Environment=NODE_ENV=production
+Environment=TZ=Europe/Moscow
 
 [Install]
 WantedBy=multi-user.target

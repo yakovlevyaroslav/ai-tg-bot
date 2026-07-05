@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { getDatabaseUrl } from './env.js';
+import { sqlTimeZoneLiteral } from './datetime.js';
 import { trackOnboardingStep } from './analytics.js';
 import { getAcquirableStartPayload } from './start-payload.js';
 import { sanitizeVisitCardContent } from './visit-card.js';
@@ -10,6 +11,12 @@ import { sanitizeVisitCardContent } from './visit-card.js';
 const { Pool } = pg;
 
 const pool = new Pool({ connectionString: getDatabaseUrl() });
+
+pool.on('connect', (client) => {
+  client.query(`SET TIME ZONE '${sqlTimeZoneLiteral()}'`).catch((err) => {
+    console.warn('[db] SET TIME ZONE failed:', err?.message ?? err);
+  });
+});
 
 export async function initDb() {
   const sqlPath = join(dirname(fileURLToPath(import.meta.url)), '../../sql/init.sql');

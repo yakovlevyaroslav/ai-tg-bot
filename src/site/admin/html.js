@@ -1,6 +1,7 @@
 import { statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { formatDateTime } from '../../shared/datetime.js';
 
 const ADMIN_CSS_PATH = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -26,14 +27,7 @@ export function esc(value) {
 }
 
 export function formatDate(value) {
-  if (!value) return '—';
-  return new Date(value).toLocaleString('ru-RU', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  return formatDateTime(value);
 }
 
 export function formatCredits(n) {
