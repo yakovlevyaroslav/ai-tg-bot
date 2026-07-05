@@ -2,6 +2,7 @@ import { Markup } from 'telegraf';
 import { config } from '../shared/config.js';
 import * as db from '../shared/db.js';
 import { EVENTS, trackEvent } from '../shared/analytics.js';
+import { applyUserMessagePlaceholders } from '../shared/user-display-name.js';
 
 /** Темы для напоминания после базового разбора (5 мин без активности) */
 export const IDLE_NUDGE_TOPICS = [
@@ -38,7 +39,7 @@ export const IDLE_NUDGE_TOPICS = [
 ];
 
 export const IDLE_NUDGE_INTRO =
-  'По твоему коду личности сейчас могут особенно волновать такие темы 👇\n\n' +
+  '{name}, по твоему коду личности сейчас могут особенно волновать такие темы 👇\n\n' +
   'Выбери сферу — сразу дам разбор. Или задай свой вопрос через «Вопросы».';
 
 const activeTimers = new Map();
@@ -97,7 +98,11 @@ async function sendIdleNudgeIfNeeded({ telegram, chatId, userId }) {
 
     trackEvent(userId, EVENTS.IDLE_NUDGE_SENT);
 
-    await telegram.sendMessage(chatId, IDLE_NUDGE_INTRO, idleNudgeTopicsInlineKeyboard());
+    await telegram.sendMessage(
+      chatId,
+      applyUserMessagePlaceholders(IDLE_NUDGE_INTRO, profile),
+      idleNudgeTopicsInlineKeyboard(),
+    );
   } catch (err) {
     console.warn('[idle-nudge] send failed:', err?.message ?? err);
   }

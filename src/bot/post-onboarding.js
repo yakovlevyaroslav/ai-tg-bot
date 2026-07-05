@@ -13,6 +13,7 @@ import { scheduleIdleNudge } from './idle-nudge.js';
 import { beginCustomQuestion } from './question-flow-handlers.js';
 import { tariffsInlineKeyboard } from './topup.js';
 import { EVENTS, trackEvent } from '../shared/analytics.js';
+import { applyUserMessagePlaceholders } from '../shared/user-display-name.js';
 
 export const POPULAR_QUESTIONS = [
   {
@@ -169,14 +170,19 @@ export async function sendPostOnboardingMenu(ctx, userId) {
   }
 
   const menuUrl = await resolveUserMenuUrl(userId);
-  await ctx.reply(POST_ONBOARDING_TEXT, postOnboardingInlineKeyboard(menuUrl));
+  await ctx.reply(
+    applyUserMessagePlaceholders(POST_ONBOARDING_TEXT, profile),
+    postOnboardingInlineKeyboard(menuUrl),
+  );
   return true;
 }
 
 export async function sendPostOnboardingOffer(ctx, userId, { withIntro = false } = {}) {
+  const profile = withIntro ? await db.getUserProfile(userId) : null;
+
   if (withIntro) {
     await postOnboardingDelay();
-    await ctx.reply(POST_ONBOARDING_INTRO_TEXT);
+    await ctx.reply(applyUserMessagePlaceholders(POST_ONBOARDING_INTRO_TEXT, profile ?? {}));
     await postOnboardingDelay();
   }
 

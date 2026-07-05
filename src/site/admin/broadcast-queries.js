@@ -387,8 +387,10 @@ export async function getActiveBroadcastCampaign() {
 export async function claimPendingDeliveries(campaignId, limit) {
   const pool = getPool();
   const { rows } = await pool.query(
-    `SELECT d.id, d.user_id, d.telegram_id
+    `SELECT d.id, d.user_id, d.telegram_id,
+            u.first_name, u.onboarding_completed, u.onboarding_data
      FROM broadcast_deliveries d
+     JOIN users u ON u.id = d.user_id
      WHERE d.campaign_id = $1 AND d.status = 'pending'
      ORDER BY d.id ASC
      LIMIT $2

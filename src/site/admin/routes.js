@@ -11,6 +11,7 @@ import {
   publishVisitCardByCode,
   unpublishVisitCard,
   VisitCardAdminError,
+  getUserProfileByTelegramId,
 } from '../../shared/db.js';
 import { buildVisitCardPublicUrl, normalizePersonalityCode } from '../../shared/visit-card.js';
 import { formatPackagesLine } from '../../shared/pricing.js';
@@ -23,6 +24,7 @@ import {
   renderBroadcastStatusPage,
 } from './broadcast-page.js';
 import { parseBroadcastButtons, sendTelegramBroadcast, cacheTelegramPhotoFileId } from '../../shared/telegram-api.js';
+import { applyUserMessagePlaceholders } from '../../shared/user-display-name.js';
 import { resolveBroadcastButtons } from '../../shared/broadcast/button-questions.js';
 import {
   appendUtmToBroadcastMarkup,
@@ -1190,9 +1192,10 @@ export function createAdminRouter() {
 
       try {
         for (const chatId of adminIds) {
+          const profile = await getUserProfileByTelegramId(chatId);
           const result = await sendTelegramBroadcast({
             chatId,
-            text: parsed.messageText,
+            text: applyUserMessagePlaceholders(parsed.messageText, profile ?? {}, { html: true }),
             photoUrl: parsed.photoUrl,
             replyMarkup: parsed.replyMarkup,
           });

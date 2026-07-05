@@ -1,5 +1,6 @@
 import { config } from '../config.js';
 import { sendTelegramBroadcast } from '../telegram-api.js';
+import { applyUserMessagePlaceholders } from '../user-display-name.js';
 import {
   claimPendingDeliveries,
   getActiveBroadcastCampaign,
@@ -46,7 +47,7 @@ async function processCampaign(campaign) {
 
     const result = await sendTelegramBroadcast({
       chatId: delivery.telegram_id,
-      text: campaign.message_text,
+      text: applyUserMessagePlaceholders(campaign.message_text, delivery, { html: true }),
       photoUrl: campaign.photo_url,
       photoFileId: campaign.photo_file_id,
       parseMode: campaign.parse_mode || 'HTML',

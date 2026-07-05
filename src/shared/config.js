@@ -176,7 +176,7 @@ export const config = {
   requestsPerMessage: Number(process.env.REQUESTS_PER_MESSAGE || 1),
   /** Бесплатные вопросы при первом /start (0 — без бонуса). Базовый разбор кода личности бесплатен. */
   welcomeBonusRequests: Number(process.env.WELCOME_BONUS_REQUESTS ?? 1),
-  /** Шаблон приветствия на /start; null — текст по умолчанию. Плейсхолдеры: {packages}, {welcome_bonus_line}, {requests_per_message} */
+  /** Шаблон приветствия на /start; null — текст по умолчанию. Плейсхолдеры: {packages}, {welcome_bonus_line}, {requests_per_message}, {name} */
   welcomeMessageTemplate: loadWelcomeMessageTemplate(),
   /** Тарифы: рубли:кол-во вопросов (публичные) */
   topupPackages: parseTopupPackages(process.env.TOPUP_PACKAGES),

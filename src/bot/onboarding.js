@@ -262,7 +262,11 @@ async function saveBirthPlaceAndConfirm(ctx, userId, query) {
 }
 
 async function beginOnboarding(ctx, userId) {
-  await ctx.reply(buildWelcomeText(ctx.from?.id), { parse_mode: WELCOME_MESSAGE_PARSE_MODE });
+  const profile = await db.getUserProfile(userId);
+  const user = profile ?? { first_name: ctx.from?.first_name, onboarding_completed: false };
+  await ctx.reply(buildWelcomeText(user, { telegramId: ctx.from?.id }), {
+    parse_mode: WELCOME_MESSAGE_PARSE_MODE,
+  });
   await delay();
   await ctx.reply(MESSAGES.askName, buildCommandReplyKeyboard(ctx.from?.id));
   markCommandReplyKeyboardShown(ctx);

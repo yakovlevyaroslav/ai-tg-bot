@@ -255,6 +255,18 @@ export async function getUserIdByTelegramId(telegramId) {
   return rows[0]?.id ?? null;
 }
 
+export async function getUserProfileByTelegramId(telegramId) {
+  const { rows } = await pool.query(
+    `SELECT id, telegram_id, username, first_name, welcome_bonus_granted,
+            onboarding_step, onboarding_data, onboarding_completed,
+            personality_code, visit_card_published, visit_card_published_at,
+            start_payload
+     FROM users WHERE telegram_id = $1`,
+    [telegramId],
+  );
+  return rows[0] ?? null;
+}
+
 export async function getHistory(userId, limit) {
   const { rows } = await pool.query(
     `SELECT role, content

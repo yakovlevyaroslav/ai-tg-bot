@@ -1,6 +1,7 @@
 import { config } from './config.js';
 import { formatPackagesLine } from './pricing.js';
 import { formatQuestions } from './requests-format.js';
+import { resolveUserDisplayName } from './user-display-name.js';
 
 const DEFAULT_TEMPLATE =
   'Привет! Это система «Код личности».\n\n' +
@@ -51,13 +52,15 @@ function buildPrivacyPolicyLinkHtml(url) {
 }
 
 /** Текст приветствия на /start и кнопку «▶️ Старт». */
-export function buildWelcomeText(telegramId = null) {
+export function buildWelcomeText(user = {}, { telegramId = null } = {}) {
   const template = config.welcomeMessageTemplate || DEFAULT_TEMPLATE;
   const privacyPolicyLink = buildPrivacyPolicyLinkHtml(resolvePrivacyPolicyUrl());
+  const tid = telegramId ?? user.telegram_id ?? null;
 
   return escapeHtml(template)
-    .replace(/\{packages\}/g, escapeHtml(formatPackagesLine(telegramId)))
+    .replace(/\{packages\}/g, escapeHtml(formatPackagesLine(tid)))
     .replace(/\{welcome_bonus_line\}/g, escapeHtml(welcomeBonusLine()))
     .replace(/\{requests_per_message\}/g, escapeHtml(formatQuestions(config.requestsPerMessage)))
+    .replace(/\{name\}/g, escapeHtml(resolveUserDisplayName(user)))
     .replace(/\{privacy_policy_url\}/g, privacyPolicyLink);
 }

@@ -340,6 +340,13 @@ function renderBroadcastButtonsHelp() {
           </table>
         </div>
 
+        <h3 class="broadcast-help-title">Плейсхолдер {name}</h3>
+        <p class="muted-text">
+          В тексте рассылки и в <code>WELCOME_MESSAGE</code> можно писать <code>{name}</code> — подставится имя получателя:
+          из анкеты (если пройдена), иначе имя из Telegram, иначе «Уважаемый пользователь».
+        </p>
+        <pre class="broadcast-preview">Привет, {name}! У нас для тебя новость…</pre>
+
         <h3 class="broadcast-help-title">UTM для ссылок на сайт</h3>
         <p class="muted-text">
           В форме рассылки блок «UTM для URL-кнопок» — параметры автоматически добавятся ко всем
@@ -514,7 +521,7 @@ export function renderBroadcastFormPage({ query = {}, campaigns = [], flash = ''
             <input type="text" name="name" required maxlength="120" value="${esc(query.name ?? '')}" placeholder="Например: Акция на тарифы">
           </label>
           <label class="export-field export-field-wide">
-            <span>Текст (HTML: &lt;b&gt;, &lt;i&gt;, &lt;a href=""&gt;)</span>
+            <span>Текст (HTML: &lt;b&gt;, &lt;i&gt;, &lt;a href=""&gt; · плейсхолдер <code>{name}</code>)</span>
             <textarea name="message_text" class="broadcast-textarea" required placeholder="Текст рассылки…">${esc(query.message_text ?? '')}</textarea>
           </label>
         `,

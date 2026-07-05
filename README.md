@@ -38,7 +38,7 @@ npm run dev
 | `OPENAI_API_KEY` | Нужен при `AI_PROVIDER=openai` |
 | `REQUESTS_PER_MESSAGE` | Списание за один ответ (по умолчанию 1) |
 | `WELCOME_BONUS_REQUESTS` | Бесплатные вопросы при первом `/start` (0 — без бонуса) |
-| `WELCOME_MESSAGE` / `WELCOME_MESSAGE_FILE` | Текст приветствия на `/start` (плейсхолдеры: `{packages}`, `{welcome_bonus_line}`, `{requests_per_message}`) |
+| `WELCOME_MESSAGE` / `WELCOME_MESSAGE_FILE` | Текст приветствия на `/start` (плейсхолдеры: `{packages}`, `{welcome_bonus_line}`, `{requests_per_message}`, `{name}`) |
 | `TOPUP_PACKAGES` | Тарифы `рубли:вопросы` через запятую | `200:5,300:10,500:20` |
 | `YOOKASSA_SHOP_ID`, `YOOKASSA_SECRET_KEY` | Ключи ЮKassa (обязательно) |
 | `ADMIN_TELEGRAM_IDS` | Telegram ID админов через запятую |
