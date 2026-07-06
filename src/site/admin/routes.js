@@ -23,7 +23,7 @@ import {
   renderBroadcastFormPage,
   renderBroadcastStatusPage,
 } from './broadcast-page.js';
-import { parseBroadcastButtons, sendTelegramBroadcast, cacheTelegramPhotoFileId } from '../../shared/telegram-api.js';
+import { parseBroadcastButtons, sendTelegramBroadcast } from '../../shared/telegram-api.js';
 import { applyUserMessagePlaceholders } from '../../shared/user-display-name.js';
 import { resolveBroadcastButtons } from '../../shared/broadcast/button-questions.js';
 import {
@@ -1268,21 +1268,11 @@ export function createAdminRouter() {
       }
 
       try {
-        let photoFileId = null;
-        if (isLocalPhotoRef(parsed.photoUrl)) {
-          photoFileId = await cacheTelegramPhotoFileId(parsed.photoUrl);
-          if (!photoFileId) {
-            throw new broadcastQueries.BroadcastError(
-              'Не удалось подготовить картинку для Telegram. Проверьте ADMIN_TELEGRAM_IDS и доступ бота к api.telegram.org',
-            );
-          }
-        }
-
         const campaign = await broadcastQueries.createBroadcastCampaign({
           name: parsed.name,
           messageText: parsed.messageText,
           photoUrl: parsed.photoUrl,
-          photoFileId,
+          photoFileId: null,
           replyMarkup: parsed.replyMarkup,
           filters: parsed.filters,
           sortOrder: parsed.filters.sortOrder,

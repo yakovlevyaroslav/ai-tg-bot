@@ -368,6 +368,7 @@ export async function sendTelegramPhoto({
   return { ...result, fileId: extractPhotoFileId(result.result) };
 }
 
+/** @deprecated Локальные фото кэшируются воркером при первой отправке получателю (без пинга админу). */
 export async function cacheTelegramPhotoFileId(photoRef) {
   if (!isLocalPhotoRef(photoRef)) {
     return null;

@@ -90,12 +90,30 @@ function exportSelect(name, options, current = '') {
   </select>`;
 }
 
+function balanceFilterRadios(current = 'all') {
+  const value = ['zero', 'positive'].includes(current) ? current : 'all';
+  const options = [
+    { value: 'all', label: 'Все пользователи' },
+    { value: 'zero', label: 'Баланс 0' },
+    { value: 'positive', label: 'Баланс > 0' },
+  ];
+
+  return options
+    .map(
+      ({ value: optionValue, label }) => `<label class="export-field export-field-check">
+        <input type="radio" name="balance_filter" value="${esc(optionValue)}"${value === optionValue ? ' checked' : ''}>
+        <span>${esc(label)}</span>
+      </label>`,
+    )
+    .join('');
+}
+
 function exportPeriodOptions(current) {
   return [
+    { value: 0, label: 'Всё время' },
     { value: 7, label: '7 дней' },
     { value: 30, label: '30 дней' },
     { value: 90, label: '90 дней' },
-    { value: 0, label: 'Всё время' },
   ]
     .map(({ value, label }) => {
       const selected = Number(current) === value ? ' selected' : '';
@@ -117,7 +135,7 @@ function audienceFilterFields(filters) {
       `
       <label class="export-field">
         <span>Период</span>
-        <select name="period" class="export-select">${exportPeriodOptions(filters.days ?? 30)}</select>
+        <select name="period" class="export-select">${exportPeriodOptions(filters.days ?? 0)}</select>
       </label>
       <label class="export-field">
         <span>Дата с</span>
@@ -198,13 +216,9 @@ function audienceFilterFields(filters) {
           { value: 'no', label: 'Нет' },
         ], filters.hasPayment)}
       </label>
-      <label class="export-field">
-        <span>Баланс от</span>
-        <input type="number" name="min_credits" min="0" value="${filters.minCredits ?? ''}" placeholder="0">
-      </label>
-      <label class="export-field">
-        <span>Баланс до</span>
-        <input type="number" name="max_credits" min="0" value="${filters.maxCredits ?? ''}" placeholder="∞">
+      <label class="export-field export-field-wide">
+        <span>Баланс вопросов</span>
+        <div class="export-grid" style="grid-template-columns:1fr">${balanceFilterRadios(filters.balanceFilter ?? 'all')}</div>
       </label>
       <label class="export-field">
         <span>Неактивны (дней)</span>

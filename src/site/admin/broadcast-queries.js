@@ -88,7 +88,7 @@ function parseIsoDate(value) {
 
 export function parseAudienceFilters(query = {}) {
   const period = Number(query.period);
-  const days = [7, 30, 90, 0].includes(period) ? period : 30;
+  const days = Number.isFinite(period) && [7, 30, 90, 0].includes(period) ? period : 0;
   const dateFrom = parseIsoDate(query.date_from);
   const dateTo = parseIsoDate(query.date_to);
   const useCustomRange = Boolean(dateFrom || dateTo);
@@ -111,8 +111,7 @@ export function parseAudienceFilters(query = {}) {
         ? String(query.onboarding_step ?? '').trim()
         : '',
     hasPayment: ['yes', 'no'].includes(query.has_payment) ? query.has_payment : '',
-    minCredits: Number.isFinite(Number(query.min_credits)) ? Number(query.min_credits) : null,
-    maxCredits: Number.isFinite(Number(query.max_credits)) ? Number(query.max_credits) : null,
+    balanceFilter: ['zero', 'positive'].includes(query.balance_filter) ? query.balance_filter : 'all',
     inactiveDays: Number.isFinite(Number(query.inactive_days))
       ? Math.max(0, Number(query.inactive_days))
       : null,
@@ -199,14 +198,10 @@ function buildAudienceWhere(filters, params) {
     )`);
   }
 
-  if (filters.minCredits != null) {
-    params.push(filters.minCredits);
-    clauses.push(`COALESCE(b.credits, 0) >= $${params.length}`);
-  }
-
-  if (filters.maxCredits != null) {
-    params.push(filters.maxCredits);
-    clauses.push(`COALESCE(b.credits, 0) <= $${params.length}`);
+  if (filters.balanceFilter === 'zero') {
+    clauses.push('COALESCE(b.credits, 0) = 0');
+  } else if (filters.balanceFilter === 'positive') {
+    clauses.push('COALESCE(b.credits, 0) > 0');
   }
 
   if (filters.inactiveDays != null && filters.inactiveDays > 0) {
@@ -436,12 +431,16 @@ export function describeAudienceFilters(filters = {}) {
     items.push({ label: 'Была оплата', value: 'нет' });
   }
 
-  if (filters.minCredits != null) {
-    items.push({ label: 'Баланс от', value: String(filters.minCredits) });
-  }
-  if (filters.maxCredits != null) {
-    items.push({ label: 'Баланс до', value: String(filters.maxCredits) });
-  }
+  const balanceLabels = {
+    all: 'все пользователи',
+    zero: 'баланс 0',
+    positive: 'баланс > 0',
+  };
+  items.push({
+    label: 'Баланс',
+    value: balanceLabels[filters.balanceFilter] ?? balanceLabels.all,
+  });
+
   if (filters.inactiveDays > 0) {
     items.push({ label: 'Неактивны', value: `${filters.inactiveDays} дн.` });
   }
