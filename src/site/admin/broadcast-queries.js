@@ -35,6 +35,20 @@ const SORT_SQL = {
   name_asc: "LOWER(COALESCE(NULLIF(u.first_name, ''), NULLIF(u.username, ''), u.telegram_id::text)) ASC",
 };
 
+const BROADCAST_ORDER_SQL = {
+  ...SORT_SQL,
+  last_activity_desc:
+    '(SELECT MAX(ae.created_at) FROM analytics_events ae WHERE ae.user_id = u.id) DESC NULLS LAST',
+  last_activity_asc:
+    '(SELECT MAX(ae.created_at) FROM analytics_events ae WHERE ae.user_id = u.id) ASC NULLS LAST',
+  credits_desc: 'COALESCE(b.credits, 0) DESC',
+  credits_asc: 'COALESCE(b.credits, 0) ASC',
+  messages_desc: '(SELECT COUNT(*)::int FROM messages m WHERE m.user_id = u.id) DESC',
+  messages_asc: '(SELECT COUNT(*)::int FROM messages m WHERE m.user_id = u.id) ASC',
+  questions_desc: '(SELECT COUNT(*)::int FROM usage_events ue WHERE ue.user_id = u.id) DESC',
+  questions_asc: '(SELECT COUNT(*)::int FROM usage_events ue WHERE ue.user_id = u.id) ASC',
+};
+
 export const ONBOARDING_STEP_OPTIONS = ONBOARDING_FUNNEL_STEPS.filter((item) => item.step).map(
   (item) => ({ value: item.step, label: item.label }),
 );
@@ -201,13 +215,6 @@ function buildAudienceWhere(filters, params) {
   return { whereSql: clauses.join(' AND ') + admin.sql, params };
 }
 
-function shiftSqlParams(sql, offset) {
-  if (!offset) {
-    return sql;
-  }
-  return sql.replace(/\$(\d+)/g, (_, index) => `$${Number(index) + offset}`);
-}
-
 export async function countAudienceRecipients(filters) {
   const pool = getPool();
   const params = [];
@@ -273,15 +280,14 @@ export async function createBroadcastCampaign({
     const { whereSql } = buildAudienceWhere(filters, insertParams);
     insertParams.push(filters.limit);
     const limitIdx = insertParams.length;
-    const shiftedWhere = shiftSqlParams(whereSql, 1);
-    const orderSql = SORT_SQL[filters.sortOrder] ?? SORT_SQL.created_at_desc;
+    const orderSql = BROADCAST_ORDER_SQL[filters.sortOrder] ?? BROADCAST_ORDER_SQL.created_at_desc;
 
     await client.query(
       `INSERT INTO broadcast_deliveries (campaign_id, user_id, telegram_id)
        SELECT $1, u.id, u.telegram_id
        FROM users u
        LEFT JOIN balances b ON b.user_id = u.id
-       WHERE ${shiftedWhere}
+       WHERE ${whereSql}
        ORDER BY ${orderSql}
        LIMIT $${limitIdx}`,
       insertParams,

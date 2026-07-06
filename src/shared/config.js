@@ -120,7 +120,7 @@ function validateTelegramToken(token) {
 }
 
 function parseTopupPackages(raw) {
-  const source = raw?.trim() || '200:5,300:10,500:20';
+  const source = raw?.trim() || '111:5,199:10,300:20';
 
   const packages = source
     .split(',')
@@ -140,7 +140,7 @@ function parseTopupPackages(raw) {
 
   if (packages.length === 0) {
     throw new Error(
-      'TOPUP_PACKAGES must contain at least one package (format: 200:5,300:10,500:20)',
+      'TOPUP_PACKAGES must contain at least one package (format: 111:5,199:10,300:20)',
     );
   }
 

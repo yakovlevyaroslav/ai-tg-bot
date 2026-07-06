@@ -13,6 +13,7 @@ import {
 } from '../../shared/broadcast/media.js';
 import { BROADCAST_MEDIA_MAX_BYTES } from './broadcast-media.js';
 import { esc, formatDate, exportFilterSection, userLabel } from './html.js';
+import { POPULAR_QUESTIONS } from '../../bot/post-onboarding.js';
 
 const STATUS_LABELS = {
   draft: 'Черновик',
@@ -256,35 +257,19 @@ function renderBroadcastButtonsHelp() {
     )
     .join('');
 
-  const popularPickRows = [
-    ['1. Предназначение', '0'],
-    ['2. Что тормозит рост', '1'],
-    ['3. Отношения', '2'],
-    ['4. Сфера работы', '3'],
-  ]
-    .map(([label, id]) =>
-      helpRow(label, `callback:post:questions:pick:${id}`, 'открывает подвопросы темы'),
-    )
-    .join('');
+  const popularPickRows = POPULAR_QUESTIONS.map((item) =>
+    helpRow(item.button, `callback:post:questions:pick:${item.id}`, 'открывает подвопросы темы'),
+  ).join('');
 
-  const popularAskRows = [
-    ['Предназначение → главная миссия', '0:0'],
-    ['Предназначение → ключевые таланты', '0:1'],
-    ['Предназначение → свой путь', '0:2'],
-    ['Рост → внутренние страхи', '1:0'],
-    ['Рост → что тянет назад', '1:1'],
-    ['Рост → первый шаг', '1:2'],
-    ['Отношения → кому я ближе', '2:0'],
-    ['Отношения → ошибки в общении', '2:1'],
-    ['Отношения → мои потребности', '2:2'],
-    ['Работа → роли с энергией', '3:0'],
-    ['Работа → без выгорания', '3:1'],
-    ['Работа → вектор на 1–2 года', '3:2'],
-  ]
-    .map(([label, ids]) =>
-      helpRow(label, `callback:post:questions:ask:${ids}`, 'сразу задаёт этот вопрос боту'),
-    )
-    .join('');
+  const popularAskRows = POPULAR_QUESTIONS.flatMap((item) =>
+    item.subquestions.map((sub) =>
+      helpRow(
+        `${item.button} → ${sub.button}`,
+        `callback:post:questions:ask:${item.id}:${sub.id}`,
+        'сразу задаёт этот вопрос боту',
+      ),
+    ),
+  ).join('');
 
   const idleRows = [
     ['❤️ Отношения', '0'],
@@ -319,8 +304,8 @@ function renderBroadcastButtonsHelp() {
         <h3 class="broadcast-help-title">Примеры для копирования</h3>
         <pre class="broadcast-preview">❓ Задать вопрос => callback:post:questions || 📋 Тарифы => callback:post:tariffs
 ✍️ Свой вопрос => callback:post:questions:custom || 🔥 Популярные => callback:post:questions:popular
-✨ Предназначение => question:В чём моё предназначение по коду личности?
-💼 Карьера => question:В какой сфере работы я реализуюсь лучше всего?
+❤️ Отношения => question:Какой партнёр мне подходит по коду личности?
+💰 Деньги => question:Какие пути заработка лучше всего открыты для меня?
 🪪 Мой код личности => callback:post:menu:open
 🌐 Сайт => ${site}</pre>
 
@@ -333,9 +318,9 @@ function renderBroadcastButtonsHelp() {
           <table class="broadcast-help-table">
             <thead><tr><th>Пример для поля «Кнопки»</th><th>Что произойдёт</th></tr></thead>
             <tbody>
-              <tr><td>${helpCode('✨ Предназначение => question:В чём моё предназначение?')}</td><td class="muted-text">мгновенный ответ AI</td></tr>
-              <tr><td>${helpCode('❤️ Отношения => question:Какой тип людей мне подходит?')}</td><td class="muted-text">мгновенный ответ AI</td></tr>
-              <tr><td>${helpCode('💼 Работа => question:Куда двигаться в карьере?')}</td><td class="muted-text">мгновенный ответ AI</td></tr>
+              <tr><td>${helpCode('❤️ Отношения => question:Какой партнёр мне подходит по коду личности?')}</td><td class="muted-text">мгновенный ответ AI</td></tr>
+              <tr><td>${helpCode('💰 Деньги => question:Какие пути заработка лучше всего открыты для меня?')}</td><td class="muted-text">мгновенный ответ AI</td></tr>
+              <tr><td>${helpCode('🌱 Развитие => question:В какой сфере жизни мне важнее всего расти?')}</td><td class="muted-text">мгновенный ответ AI</td></tr>
             </tbody>
           </table>
         </div>
