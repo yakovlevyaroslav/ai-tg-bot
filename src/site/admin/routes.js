@@ -1137,10 +1137,38 @@ export function createAdminRouter() {
 
     await broadcastQueries.refreshBroadcastCampaignCounters(id);
     const updated = await broadcastQueries.getBroadcastCampaign(id);
-    const failures = await broadcastQueries.listBroadcastFailures(id, 20);
+    const deliveryStatus = String(req.query.delivery_status ?? '').trim();
+    const deliveryPage = Math.max(1, Number(req.query.delivery_page) || 1);
+    const deliveryLimit = broadcastQueries.BROADCAST_DELIVERIES_PER_PAGE;
+
+    const statsRows = await broadcastQueries.getBroadcastCampaignStats(id);
+    const deliveryStats = Object.fromEntries(statsRows.map((row) => [row.status, row.count]));
+
+    const deliveryTotal = await broadcastQueries.countBroadcastDeliveries(id, deliveryStatus);
+    const deliveryPages = Math.max(1, Math.ceil(deliveryTotal / deliveryLimit));
+    const safeDeliveryPage = Math.min(deliveryPage, deliveryPages);
+    const deliveries = await broadcastQueries.listBroadcastDeliveries({
+      campaignId: id,
+      status: deliveryStatus,
+      page: safeDeliveryPage,
+      limit: deliveryLimit,
+    });
+
+    const filters = broadcastQueries.normalizeCampaignFilters(updated.filters);
+    const filtersDescription = broadcastQueries.describeAudienceFilters(filters);
     const flash = req.query.ok ? broadcastFlash('success', 'Статус обновлён') : '';
 
-    const body = renderBroadcastStatusPage({ campaign: updated, failures, flash });
+    const body = renderBroadcastStatusPage({
+      campaign: updated,
+      filtersDescription,
+      deliveryStats,
+      deliveries,
+      deliveryPage: safeDeliveryPage,
+      deliveryPages,
+      deliveryTotal,
+      deliveryStatus,
+      flash,
+    });
     res.type('html').send(layout(updated.name, 'broadcast', body));
   });
 

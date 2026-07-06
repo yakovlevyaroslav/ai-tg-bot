@@ -4,6 +4,7 @@ import {
   BROADCAST_SORT_OPTIONS,
   ONBOARDING_STEP_OPTIONS,
   AUDIENCE_STAGE_OPTIONS,
+  DELIVERY_STATUS_LABELS,
   parseAudienceFilters,
 } from './broadcast-queries.js';
 import {
@@ -12,7 +13,15 @@ import {
   resolveCampaignPhotoPreviewUrl,
 } from '../../shared/broadcast/media.js';
 import { BROADCAST_MEDIA_MAX_BYTES } from './broadcast-media.js';
-import { esc, formatDate, exportFilterSection, userLabel } from './html.js';
+import {
+  esc,
+  formatDate,
+  formatCredits,
+  formatStartPayloadLabel,
+  exportFilterSection,
+  userTableAlias,
+  userTableName,
+} from './html.js';
 import { POPULAR_QUESTIONS } from '../../bot/post-onboarding.js';
 
 const STATUS_LABELS = {
@@ -24,6 +33,52 @@ const STATUS_LABELS = {
   cancelled: 'Отменена',
 };
 
+const DELIVERY_STATUS_BADGE = {
+  pending: 'badge-pending',
+  sent: 'badge-success',
+  failed: 'badge-pending',
+  skipped: 'badge-muted',
+};
+
+function detailItem(label, value) {
+  return `<div class="detail-item"><label>${esc(label)}</label><span>${value}</span></div>`;
+}
+
+function formatReplyMarkupPreview(markup) {
+  const keyboard = markup?.inline_keyboard;
+  if (!Array.isArray(keyboard) || !keyboard.length) {
+    return '<span class="muted-text">—</span>';
+  }
+
+  const lines = keyboard.flatMap((row) =>
+    row.map((button) => {
+      if (button.url) {
+        return `${button.text} → ${button.url}`;
+      }
+      if (button.callback_data) {
+        return `${button.text} → callback:${button.callback_data}`;
+      }
+      return button.text ?? '—';
+    }),
+  );
+
+  return `<pre class="broadcast-preview">${esc(lines.join('\n'))}</pre>`;
+}
+
+function deliveryStatusBadge(status) {
+  const label = DELIVERY_STATUS_LABELS[status] ?? status;
+  const cls = DELIVERY_STATUS_BADGE[status] ?? 'badge-muted';
+  return `<span class="badge ${cls}">${esc(label)}</span>`;
+}
+
+function deliveryFilterLink(campaignId, status, current, label, count) {
+  const active = current === status;
+  const href = status
+    ? `/admin/broadcast/${campaignId}?delivery_status=${encodeURIComponent(status)}`
+    : `/admin/broadcast/${campaignId}`;
+  const countSuffix = count != null ? ` (${count})` : '';
+  return `<a href="${href}" class="btn btn-sm${active ? '' : ' btn-ghost'}">${esc(label)}${esc(countSuffix)}</a>`;
+}
 function exportSelect(name, options, current = '') {
   return `<select name="${name}" class="export-select">
     ${options
@@ -178,7 +233,7 @@ function audienceFilterFields(filters) {
 
 function campaignRows(campaigns) {
   if (!campaigns.length) {
-    return `<tr><td colspan="6" class="empty">Рассылок пока не было</td></tr>`;
+    return `<tr><td colspan="7" class="empty">Рассылок пока не было</td></tr>`;
   }
 
   return campaigns
@@ -192,7 +247,8 @@ function campaignRows(campaigns) {
         <td>${esc(c.name)}</td>
         <td><span class="badge badge-muted">${esc(STATUS_LABELS[c.status] || c.status)}</span></td>
         <td>${esc(c.sent_count)} / ${esc(c.total_recipients)} (${progress}%)</td>
-        <td>${esc(c.failed_count)} ошибок</td>
+        <td>${esc(c.failed_count)}</td>
+        <td>${esc(c.skipped_count)}</td>
         <td>${formatDate(c.created_at)}</td>
       </tr>`;
     })
@@ -575,7 +631,7 @@ export function renderBroadcastFormPage({ query = {}, campaigns = [], flash = ''
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th>ID</th><th>Название</th><th>Статус</th><th>Прогресс</th><th>Ошибки</th><th>Создана</th></tr>
+            <tr><th>ID</th><th>Название</th><th>Статус</th><th>Прогресс</th><th>Ошибки</th><th>Пропущено</th><th>Создана</th></tr>
           </thead>
           <tbody>${campaignRows(campaigns)}</tbody>
         </table>
@@ -604,23 +660,26 @@ export function renderBroadcastFormPage({ query = {}, campaigns = [], flash = ''
     </script>`;
 }
 
-export function renderBroadcastStatusPage({ campaign, failures = [], flash = '' }) {
+export function renderBroadcastStatusPage({
+  campaign,
+  filtersDescription = [],
+  deliveryStats = {},
+  deliveries = [],
+  deliveryPage = 1,
+  deliveryPages = 1,
+  deliveryTotal = 0,
+  deliveryStatus = '',
+  flash = '',
+}) {
   const done =
     Number(campaign.sent_count) + Number(campaign.failed_count) + Number(campaign.skipped_count);
+  const pendingCount = Number(deliveryStats.pending ?? 0);
   const progress =
     campaign.total_recipients > 0 ? Math.round((done / campaign.total_recipients) * 100) : 0;
-
-  const failureRows = failures.length
-    ? failures
-        .map(
-          (row) => `<tr>
-          <td><a href="/admin/users/${row.user_id}">${esc(userLabel(row))}</a></td>
-          <td><code>${esc(row.telegram_id)}</code></td>
-          <td>${esc(row.error_description || '—')}</td>
-        </tr>`,
-        )
-        .join('')
-    : `<tr><td colspan="3" class="empty">Ошибок пока нет</td></tr>`;
+  const photoPreview = resolveCampaignPhotoPreviewUrl(campaign.photo_url);
+  const sortLabel =
+    BROADCAST_SORT_OPTIONS.find((option) => option.value === campaign.sort_order)?.label ??
+    campaign.sort_order;
 
   const controls =
     campaign.status === 'running'
@@ -641,40 +700,148 @@ export function renderBroadcastStatusPage({ campaign, failures = [], flash = '' 
            </form>`
         : '';
 
+  const filterRows = filtersDescription.length
+    ? filtersDescription
+        .map(
+          (item) =>
+            `<tr><td>${esc(item.label)}</td><td>${esc(item.value)}</td></tr>`,
+        )
+        .join('')
+    : `<tr><td colspan="2" class="empty">Фильтры не сохранены</td></tr>`;
+
+  const deliveryRows = deliveries.length
+    ? deliveries
+        .map((row) => {
+          const user = {
+            first_name: row.first_name,
+            username: row.username,
+            onboarding_name: row.onboarding_name,
+            telegram_id: row.telegram_id,
+          };
+          return `<tr>
+          <td>${deliveryStatusBadge(row.status)}</td>
+          <td><a href="/admin/users/${row.user_id}">#${row.user_id}</a></td>
+          <td>${esc(userTableName(user))}</td>
+          <td>${esc(userTableAlias(user))}</td>
+          <td><code>${esc(row.telegram_id)}</code></td>
+          <td>${esc(row.personality_code || '—')}</td>
+          <td>${formatCredits(row.credits)}</td>
+          <td>${esc(formatStartPayloadLabel(row.start_payload))}</td>
+          <td>${row.sent_at ? formatDate(row.sent_at) : '—'}</td>
+          <td>${esc(row.error_description || '—')}</td>
+        </tr>`;
+        })
+        .join('')
+    : `<tr><td colspan="10" class="empty">Получателей не найдено</td></tr>`;
+
+  const statusQuery = deliveryStatus
+    ? `&delivery_status=${encodeURIComponent(deliveryStatus)}`
+    : '';
+  const prevPage =
+    deliveryPage > 1
+      ? `/admin/broadcast/${campaign.id}?delivery_page=${deliveryPage - 1}${statusQuery}`
+      : null;
+  const nextPage =
+    deliveryPage < deliveryPages
+      ? `/admin/broadcast/${campaign.id}?delivery_page=${deliveryPage + 1}${statusQuery}`
+      : null;
+
+  const totalAll =
+    Number(deliveryStats.sent ?? 0) +
+    Number(deliveryStats.failed ?? 0) +
+    Number(deliveryStats.pending ?? 0) +
+    Number(deliveryStats.skipped ?? 0);
+
   return `
     ${flash}
     <p><a href="/admin/broadcast">← Все рассылки</a></p>
     <h1 class="page-title">${esc(campaign.name)}</h1>
     <p class="page-subtitle">
-      #${campaign.id} · ${esc(STATUS_LABELS[campaign.status] || campaign.status)} ·
-      ${esc(campaign.sent_count)} отправлено · ${esc(campaign.failed_count)} ошибок ·
-      ${esc(campaign.skipped_count)} пропущено · ${progress}% готово
+      Кампания #${campaign.id} · ${esc(STATUS_LABELS[campaign.status] || campaign.status)}
     </p>
 
     <div class="toolbar">${controls}
-      ${campaign.status === 'running' || campaign.status === 'queued' ? '<span class="muted-text">Страница обновляется воркером бота каждые несколько секунд</span>' : ''}
-      ${campaign.status === 'running' || campaign.status === 'queued' ? `<a href="/admin/broadcast/${campaign.id}" class="btn btn-ghost btn-sm">Обновить</a>` : ''}
+      ${campaign.status === 'running' || campaign.status === 'queued' ? '<span class="muted-text">Воркер бота отправляет сообщения каждые несколько секунд</span>' : ''}
+      <a href="/admin/broadcast/${campaign.id}" class="btn btn-ghost btn-sm">Обновить</a>
     </div>
 
     <div class="card" style="margin-bottom:1rem">
-      <div class="card-header">Текст</div>
+      <div class="card-header">Сводка</div>
+      <div class="detail-grid">
+        ${detailItem('Статус', `<span class="badge badge-muted">${esc(STATUS_LABELS[campaign.status] || campaign.status)}</span>`)}
+        ${detailItem('Получателей', esc(campaign.total_recipients))}
+        ${detailItem('Отправлено', esc(campaign.sent_count))}
+        ${detailItem('Ошибок', esc(campaign.failed_count))}
+        ${detailItem('Пропущено', esc(campaign.skipped_count))}
+        ${detailItem('В очереди', esc(pendingCount))}
+        ${detailItem('Прогресс', `${progress}% (${done} / ${campaign.total_recipients})`)}
+        ${detailItem('Создана', formatDate(campaign.created_at))}
+        ${detailItem('Старт', campaign.started_at ? formatDate(campaign.started_at) : '—')}
+        ${detailItem('Завершена', campaign.completed_at ? formatDate(campaign.completed_at) : '—')}
+        ${detailItem('Сортировка', esc(sortLabel))}
+        ${detailItem('Parse mode', esc(campaign.parse_mode || 'HTML'))}
+        ${detailItem('Фото (URL)', campaign.photo_url ? `<a href="${esc(campaign.photo_url)}" target="_blank" rel="noopener">${esc(campaign.photo_url)}</a>` : '—')}
+        ${detailItem('Фото (file_id)', esc(campaign.photo_file_id || '—'))}
+      </div>
+      <div style="padding:0 1rem 1rem">
+        <div class="muted-text" style="margin-bottom:6px">Прогресс отправки</div>
+        <div style="background:#eef1f4;border-radius:8px;height:12px;overflow:hidden">
+          <div style="width:${progress}%;background:#3b82f6;height:100%"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:1rem">
+      <div class="card-header">Фильтры аудитории при запуске</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Параметр</th><th>Значение</th></tr></thead>
+          <tbody>${filterRows}</tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:1rem">
+      <div class="card-header">Сообщение</div>
       <pre class="broadcast-preview">${esc(campaign.message_text)}</pre>
       ${
-        resolveCampaignPhotoPreviewUrl(campaign.photo_url)
+        photoPreview
           ? `<div class="broadcast-photo-preview" style="padding:0 1rem 1rem">
-               <img src="${esc(resolveCampaignPhotoPreviewUrl(campaign.photo_url))}" alt="Картинка рассылки">
+               <img src="${esc(photoPreview)}" alt="Картинка рассылки">
              </div>`
           : ''
       }
+      <div style="padding:0 1rem 1rem">
+        <div class="muted-text" style="margin-bottom:6px">Кнопки</div>
+        ${formatReplyMarkupPreview(campaign.reply_markup)}
+      </div>
     </div>
 
     <div class="card">
-      <div class="card-header">Последние ошибки</div>
+      <div class="card-header">Получатели</div>
+      <div class="toolbar" style="padding:0 1rem 1rem;flex-wrap:wrap;gap:8px">
+        ${deliveryFilterLink(campaign.id, '', deliveryStatus, 'Все', totalAll)}
+        ${deliveryFilterLink(campaign.id, 'sent', deliveryStatus, 'Отправлено', deliveryStats.sent)}
+        ${deliveryFilterLink(campaign.id, 'failed', deliveryStatus, 'Ошибки', deliveryStats.failed)}
+        ${deliveryFilterLink(campaign.id, 'pending', deliveryStatus, 'В очереди', deliveryStats.pending)}
+        ${deliveryFilterLink(campaign.id, 'skipped', deliveryStatus, 'Пропущено', deliveryStats.skipped)}
+        <span class="muted-text">Показано ${deliveries.length} из ${deliveryTotal}</span>
+      </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Пользователь</th><th>Telegram</th><th>Ошибка</th></tr></thead>
-          <tbody>${failureRows}</tbody>
+          <thead>
+            <tr>
+              <th>Статус</th><th>ID</th><th>Имя</th><th>Alias</th><th>Telegram</th>
+              <th>Код</th><th>Баланс</th><th>Метка</th><th>Отправлено</th><th>Ошибка</th>
+            </tr>
+          </thead>
+          <tbody>${deliveryRows}</tbody>
         </table>
+      </div>
+      <div class="pagination" style="padding:0 1rem 1rem">
+        ${prevPage ? `<a href="${prevPage}" class="btn btn-ghost btn-sm">← Назад</a>` : ''}
+        <span>Стр. ${deliveryPage} из ${deliveryPages}</span>
+        ${nextPage ? `<a href="${nextPage}" class="btn btn-ghost btn-sm">Вперёд →</a>` : ''}
       </div>
     </div>`;
 }

@@ -4,6 +4,16 @@ import { ONBOARDING_FUNNEL_STEPS } from './analytics-queries.js';
 import { appendStartPayloadFilters, parseStartPayloadFilters } from './user-audience-sql.js';
 
 export const BROADCAST_MAX_RECIPIENTS = Number(process.env.BROADCAST_MAX_RECIPIENTS || 10_000);
+export const BROADCAST_DELIVERIES_PER_PAGE = 50;
+
+const DELIVERY_STATUS_LABELS = {
+  pending: 'В очереди',
+  sent: 'Отправлено',
+  failed: 'Ошибка',
+  skipped: 'Пропущено',
+};
+
+export { DELIVERY_STATUS_LABELS };
 
 export const BROADCAST_SORT_OPTIONS = [
   { value: 'created_at_desc', label: 'Регистрация: новые → старые' },
@@ -352,6 +362,171 @@ export async function listBroadcastFailures(id, limit = 15) {
      LIMIT $2`,
     [id, limit],
   );
+  return rows;
+}
+
+export function normalizeCampaignFilters(raw) {
+  if (!raw) {
+    return {};
+  }
+  if (typeof raw === 'string') {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return {};
+    }
+  }
+  return raw;
+}
+
+const GENDER_LABELS = { male: 'Мужской', female: 'Женский' };
+
+export function describeAudienceFilters(filters = {}) {
+  const items = [];
+
+  if (filters.useCustomRange) {
+    if (filters.dateFrom) {
+      items.push({ label: 'Регистрация с', value: filters.dateFrom });
+    }
+    if (filters.dateTo) {
+      items.push({ label: 'Регистрация по', value: filters.dateTo });
+    }
+  } else if (filters.days > 0) {
+    items.push({ label: 'Период регистрации', value: `последние ${filters.days} дн.` });
+  } else {
+    items.push({ label: 'Период регистрации', value: 'всё время' });
+  }
+
+  if (filters.search) {
+    items.push({ label: 'Поиск', value: filters.search });
+  }
+
+  const stage = AUDIENCE_STAGE_OPTIONS.find((option) => option.value === filters.audienceStage);
+  if (stage?.value) {
+    items.push({ label: 'Статус пользователя', value: stage.label });
+  }
+
+  if (filters.onboardingStep) {
+    const step = ONBOARDING_STEP_OPTIONS.find((option) => option.value === filters.onboardingStep);
+    items.push({ label: 'Шаг анкеты', value: step?.label ?? filters.onboardingStep });
+  }
+
+  if (filters.gender) {
+    items.push({ label: 'Пол', value: GENDER_LABELS[filters.gender] ?? filters.gender });
+  }
+
+  if (filters.startPayload) {
+    items.push({ label: 'Метка ?start=', value: filters.startPayload });
+  }
+  if (filters.hasStartPayload === 'yes') {
+    items.push({ label: 'Есть метку', value: 'да' });
+  } else if (filters.hasStartPayload === 'no') {
+    items.push({ label: 'Есть метку', value: 'нет (organic)' });
+  }
+
+  if (filters.welcomeBonus === 'yes') {
+    items.push({ label: 'Стартовый бонус', value: 'получен' });
+  } else if (filters.welcomeBonus === 'no') {
+    items.push({ label: 'Стартовый бонус', value: 'нет' });
+  }
+
+  if (filters.hasPayment === 'yes') {
+    items.push({ label: 'Была оплата', value: 'да' });
+  } else if (filters.hasPayment === 'no') {
+    items.push({ label: 'Была оплата', value: 'нет' });
+  }
+
+  if (filters.minCredits != null) {
+    items.push({ label: 'Баланс от', value: String(filters.minCredits) });
+  }
+  if (filters.maxCredits != null) {
+    items.push({ label: 'Баланс до', value: String(filters.maxCredits) });
+  }
+  if (filters.inactiveDays > 0) {
+    items.push({ label: 'Неактивны', value: `${filters.inactiveDays} дн.` });
+  }
+
+  const sort = BROADCAST_SORT_OPTIONS.find((option) => option.value === filters.sortOrder);
+  items.push({ label: 'Сортировка', value: sort?.label ?? filters.sortOrder ?? '—' });
+  items.push({ label: 'Лимит получателей', value: String(filters.limit ?? BROADCAST_MAX_RECIPIENTS) });
+  items.push({ label: 'Исключить админов', value: filters.excludeAdmins === false ? 'нет' : 'да' });
+
+  return items;
+}
+
+export async function countBroadcastDeliveries(campaignId, status = '') {
+  const pool = getPool();
+  const params = [campaignId];
+  let statusClause = '';
+
+  if (status && DELIVERY_STATUS_LABELS[status]) {
+    params.push(status);
+    statusClause = ` AND d.status = $${params.length}`;
+  }
+
+  const { rows } = await pool.query(
+    `SELECT COUNT(*)::int AS total
+     FROM broadcast_deliveries d
+     WHERE d.campaign_id = $1${statusClause}`,
+    params,
+  );
+
+  return rows[0]?.total ?? 0;
+}
+
+export async function listBroadcastDeliveries({
+  campaignId,
+  status = '',
+  page = 1,
+  limit = BROADCAST_DELIVERIES_PER_PAGE,
+}) {
+  const pool = getPool();
+  const safePage = Math.max(1, Number(page) || 1);
+  const safeLimit = Math.min(Math.max(Number(limit) || BROADCAST_DELIVERIES_PER_PAGE, 1), 200);
+  const offset = (safePage - 1) * safeLimit;
+  const params = [campaignId];
+  let statusClause = '';
+
+  if (status && DELIVERY_STATUS_LABELS[status]) {
+    params.push(status);
+    statusClause = ` AND d.status = $${params.length}`;
+  }
+
+  params.push(safeLimit, offset);
+  const limitIdx = params.length - 1;
+  const offsetIdx = params.length;
+
+  const { rows } = await pool.query(
+    `SELECT
+       d.id,
+       d.status,
+       d.telegram_id,
+       d.sent_at,
+       d.error_description,
+       u.id AS user_id,
+       u.username,
+       u.first_name,
+       NULLIF(TRIM(u.onboarding_data->>'name'), '') AS onboarding_name,
+       NULLIF(TRIM(u.start_payload), '') AS start_payload,
+       COALESCE(b.credits, 0)::bigint AS credits,
+       COALESCE(u.personality_code, u.onboarding_data->>'personality_code') AS personality_code
+     FROM broadcast_deliveries d
+     JOIN users u ON u.id = d.user_id
+     LEFT JOIN balances b ON b.user_id = u.id
+     WHERE d.campaign_id = $1${statusClause}
+     ORDER BY
+       CASE d.status
+         WHEN 'sent' THEN 0
+         WHEN 'failed' THEN 1
+         WHEN 'pending' THEN 2
+         ELSE 3
+       END,
+       d.sent_at DESC NULLS LAST,
+       d.id DESC
+     LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
+    params,
+  );
+
   return rows;
 }
 
