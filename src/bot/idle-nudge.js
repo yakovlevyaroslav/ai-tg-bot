@@ -4,7 +4,7 @@ import * as db from '../shared/db.js';
 import { EVENTS, trackEvent } from '../shared/analytics.js';
 import { applyUserMessagePlaceholders } from '../shared/user-display-name.js';
 
-/** Темы для напоминания после базового разбора (5 мин без активности) */
+/** Темы для напоминания после базового разбора (по умолчанию 30 мин без активности) */
 export const IDLE_NUDGE_TOPICS = [
   {
     id: 0,

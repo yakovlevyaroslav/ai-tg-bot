@@ -244,7 +244,7 @@ export const config = {
   /** Пауза перед предложением задать следующий вопрос (мс) */
   postAnswerFollowupDelayMs: Number(process.env.POST_ANSWER_FOLLOWUP_DELAY_MS || 5000),
   /** Напоминание с темами, если после разбора нет сообщений (мс) */
-  idleNudgeDelayMs: Number(process.env.IDLE_NUDGE_DELAY_MS || 300000),
+  idleNudgeDelayMs: Number(process.env.IDLE_NUDGE_DELAY_MS || 1800000),
   /** Порог: при остатке ниже — кнопка «Тарифы» под ответами после списания */
   lowTokensTariffsThreshold: Number(process.env.LOW_TOKENS_TARIFFS_THRESHOLD || 3),
   /** Рассылка: интервал воркера, размер пачки, пауза между сообщениями (мс) */
