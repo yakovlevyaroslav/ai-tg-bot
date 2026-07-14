@@ -30,10 +30,13 @@ const MESSAGES = {
     'Для начала скажи своё имя:',
   askGender: 'Выберите пол:',
   askBirthDate: 'А теперь напиши дату рождения в формате 28.05.1993',
-  askBirthTime:
-    'Напиши время рождения в формате: 18:47\n(если не знаешь точное, напиши примерное):',
   askBirthPlace:
-    'И последнее — напиши город или населённый пункт рождения. Например: Москва',
+    'Теперь напиши город или населённый пункт рождения. Например: Москва\n\n' +
+    'Он нужен, чтобы правильно учесть часовой пояс.',
+  askBirthTime:
+    'Напиши время рождения в формате: 18:47\n\n' +
+    'Укажи местное время в том городе, где ты родился(ась).\n' +
+    '(если не знаешь точное — напиши примерное):',
   confirmHint: 'Всё верно? Нажмите кнопку ниже 👇',
   thinking:
     '🧠 Сейчас в раздумьях — свожу Астрологию, Human Design, Нумерологию, Сюцай и Ведическую Астрологию в единый код личности...',
@@ -93,8 +96,8 @@ function buildSummaryText(data) {
     `Ваше имя: ${data.name ?? '—'}`,
     `Пол: ${data.gender_label ?? '—'}`,
     `Дата рождения: ${data.birth_date ?? '—'}`,
-    `Время рождения: ${data.birth_time ?? '—'} (местное)`,
     placeLine,
+    `Время рождения: ${data.birth_time ?? '—'} (местное)`,
   ].join('\n');
 }
 
@@ -251,7 +254,7 @@ async function runCalculationLoading(ctx, userId) {
   }
 }
 
-async function saveBirthPlaceAndConfirm(ctx, userId, query) {
+async function saveBirthPlaceAndAskTime(ctx, userId, query) {
   const place = query.trim();
   if (!place) {
     await ctx.reply('Напишите название города.');
@@ -265,7 +268,7 @@ async function saveBirthPlaceAndConfirm(ctx, userId, query) {
     birthTime: data.birth_time,
   });
 
-  await db.setOnboardingStep(userId, 'await_confirm', {
+  await db.setOnboardingStep(userId, 'await_birth_time', {
     birth_place: place,
     birth_place_label: resolved.birth_place_label || place,
     birth_place_lat: resolved.birth_place_lat,
@@ -279,6 +282,35 @@ async function saveBirthPlaceAndConfirm(ctx, userId, query) {
     ? `Место рождения: ${resolved.birth_place_label || place} (${resolved.birth_timezone})`
     : `Место рождения: ${resolved.birth_place_label || place}`;
   await ctx.reply(placeLine);
+  await askBirthTime(ctx, userId);
+}
+
+async function saveBirthTimeAndConfirm(ctx, userId, birthTime) {
+  const profile = await db.getUserProfile(userId);
+  const data = profile?.onboarding_data ?? {};
+  const place = data.birth_place_label || data.birth_place;
+  const resolved = place
+    ? await resolveBirthPlace(place, {
+        birthDate: data.birth_date,
+        birthTime,
+      })
+    : null;
+
+  await db.setOnboardingStep(userId, 'await_confirm', {
+    birth_time: birthTime,
+    ...(resolved
+      ? {
+          birth_place_label: resolved.birth_place_label || place,
+          birth_place_lat: resolved.birth_place_lat,
+          birth_place_lon: resolved.birth_place_lon,
+          birth_timezone: resolved.birth_timezone,
+          birth_utc_offset: resolved.birth_utc_offset,
+          birth_time_context: resolved.birth_time_context,
+        }
+      : {}),
+  });
+
+  await ctx.reply(`Время рождения: ${birthTime} (местное)`);
 
   const updated = await db.getUserProfile(userId);
   await sendSummaryForConfirm(ctx, userId, updated.onboarding_data);
@@ -311,11 +343,11 @@ async function resumeOnboarding(ctx, userId, profile) {
     case 'await_birth_date':
       await ctx.reply(MESSAGES.askBirthDate);
       return;
-    case 'await_birth_time':
-      await ctx.reply(MESSAGES.askBirthTime);
-      return;
     case 'await_birth_place':
       await ctx.reply(MESSAGES.askBirthPlace);
+      return;
+    case 'await_birth_time':
+      await ctx.reply(MESSAGES.askBirthTime);
       return;
     case 'await_confirm':
       await ctx.reply(buildSummaryText(profile.onboarding_data ?? {}), confirmKeyboard());
@@ -438,21 +470,8 @@ export async function handleOnboardingText(ctx, userId, text, profile) {
       return true;
     }
 
-    await db.setOnboardingStep(userId, 'await_birth_time', { birth_date: birthDate });
+    await db.setOnboardingStep(userId, 'await_birth_place', { birth_date: birthDate });
     await ctx.reply(`Дата рождения: ${birthDate}`);
-    await askBirthTime(ctx, userId);
-    return true;
-  }
-
-  if (step === 'await_birth_time') {
-    const birthTime = parseBirthTime(text);
-    if (!birthTime) {
-      await ctx.reply('Укажите время в формате 18:47');
-      return true;
-    }
-
-    await db.setOnboardingStep(userId, 'await_birth_place', { birth_time: birthTime });
-    await ctx.reply(`Время рождения: ${birthTime}`);
     await askBirthPlace(ctx, userId);
     return true;
   }
@@ -464,7 +483,18 @@ export async function handleOnboardingText(ctx, userId, text, profile) {
       return true;
     }
 
-    await saveBirthPlaceAndConfirm(ctx, userId, query);
+    await saveBirthPlaceAndAskTime(ctx, userId, query);
+    return true;
+  }
+
+  if (step === 'await_birth_time') {
+    const birthTime = parseBirthTime(text);
+    if (!birthTime) {
+      await ctx.reply('Укажите время в формате 18:47');
+      return true;
+    }
+
+    await saveBirthTimeAndConfirm(ctx, userId, birthTime);
     return true;
   }
 

@@ -6,8 +6,8 @@ export const ONBOARDING_FUNNEL_STEPS = [
   { key: 'await_name', label: 'Имя', event: 'onboarding.step', step: 'await_name' },
   { key: 'await_gender', label: 'Пол', event: 'onboarding.step', step: 'await_gender' },
   { key: 'await_birth_date', label: 'Дата рождения', event: 'onboarding.step', step: 'await_birth_date' },
-  { key: 'await_birth_time', label: 'Время рождения', event: 'onboarding.step', step: 'await_birth_time' },
   { key: 'await_birth_place', label: 'Место рождения', event: 'onboarding.step', step: 'await_birth_place' },
+  { key: 'await_birth_time', label: 'Время рождения', event: 'onboarding.step', step: 'await_birth_time' },
   { key: 'await_confirm', label: 'Подтверждение', event: 'onboarding.step', step: 'await_confirm' },
   { key: 'calculating', label: 'Расчёт кода', event: 'onboarding.step', step: 'calculating' },
   {
