@@ -5,6 +5,7 @@ import {
   generatePersonalityCode,
   splitPersonalityCodeReply,
 } from './personality-code.js';
+import { resolveBirthPlace } from '../shared/birth-place-timezone.js';
 import {
   buildCommandReplyKeyboard,
   markCommandReplyKeyboardShown,
@@ -81,14 +82,19 @@ function confirmKeyboard() {
 }
 
 function buildSummaryText(data) {
+  const place = data.birth_place_label ?? '—';
+  const placeLine = data.birth_timezone
+    ? `Место рождения: ${place} (${data.birth_timezone}${data.birth_utc_offset ? `, ${data.birth_utc_offset}` : ''})`
+    : `Место рождения: ${place}`;
+
   return [
     'Указаны данные:',
     '',
     `Ваше имя: ${data.name ?? '—'}`,
     `Пол: ${data.gender_label ?? '—'}`,
     `Дата рождения: ${data.birth_date ?? '—'}`,
-    `Время рождения: ${data.birth_time ?? '—'}`,
-    `Место рождения: ${data.birth_place_label ?? '—'}`,
+    `Время рождения: ${data.birth_time ?? '—'} (местное)`,
+    placeLine,
   ].join('\n');
 }
 
@@ -206,7 +212,10 @@ async function runCalculationLoading(ctx, userId) {
 
     const result = await generatePersonalityCode(data);
 
-    const chunks = splitPersonalityCodeReply(result.content);
+    const chunks = splitPersonalityCodeReply(result.content, {
+      mainContent: result.mainContent,
+      conclusionContent: result.conclusionContent,
+    });
 
     for (const chunk of chunks) {
       await replyFormatted(ctx, chunk);
@@ -220,6 +229,7 @@ async function runCalculationLoading(ctx, userId) {
       sucai_code: result.codes.sucaiCode,
       jyotish_code: result.codes.jyotishCode,
       personality_code_result: result.content,
+      ...(result.onboardingDataPatch ?? {}),
     });
     await db.setOnboardingStep(userId, 'completed');
     await db.setOnboardingCompleted(userId, true);
@@ -248,14 +258,27 @@ async function saveBirthPlaceAndConfirm(ctx, userId, query) {
     return;
   }
 
-  await db.setOnboardingStep(userId, 'await_confirm', {
-    birth_place: place,
-    birth_place_label: place,
-    birth_place_lat: null,
-    birth_place_lon: null,
+  const profile = await db.getUserProfile(userId);
+  const data = profile?.onboarding_data ?? {};
+  const resolved = await resolveBirthPlace(place, {
+    birthDate: data.birth_date,
+    birthTime: data.birth_time,
   });
 
-  await ctx.reply(`Место рождения: ${place}`);
+  await db.setOnboardingStep(userId, 'await_confirm', {
+    birth_place: place,
+    birth_place_label: resolved.birth_place_label || place,
+    birth_place_lat: resolved.birth_place_lat,
+    birth_place_lon: resolved.birth_place_lon,
+    birth_timezone: resolved.birth_timezone,
+    birth_utc_offset: resolved.birth_utc_offset,
+    birth_time_context: resolved.birth_time_context,
+  });
+
+  const placeLine = resolved.birth_timezone
+    ? `Место рождения: ${resolved.birth_place_label || place} (${resolved.birth_timezone})`
+    : `Место рождения: ${resolved.birth_place_label || place}`;
+  await ctx.reply(placeLine);
 
   const updated = await db.getUserProfile(userId);
   await sendSummaryForConfirm(ctx, userId, updated.onboarding_data);

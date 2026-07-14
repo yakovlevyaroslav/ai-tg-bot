@@ -97,9 +97,13 @@ export function buildOnboardingSystemContext(data) {
     `- Дата рождения: ${data.birth_date}`,
     `- Время рождения: ${data.birth_time ?? '—'}`,
     `- Место рождения: ${data.birth_place_label ?? data.birth_place ?? '—'}`,
+    data.birth_timezone
+      ? `- Часовой пояс места рождения: ${data.birth_timezone}${data.birth_utc_offset ? ` (${data.birth_utc_offset})` : ''}`
+      : null,
+    data.birth_time_context ? `- Контекст времени: ${data.birth_time_context}` : null,
     `- Код личности: ${codes.fullCode}`,
     '- Направления кода: астрология, Human Design, нумерология, Сюцай, ведическая астрология (Джойтиш)',
-  ];
+  ].filter(Boolean);
 
   if (codes.astrologyCode) {
     lines.push(`- Код астрологии: ${codes.astrologyCode}`);

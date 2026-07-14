@@ -10,6 +10,7 @@ export async function complete(messages) {
   const response = await client.chat.completions.create({
     model: config.openaiModel,
     messages,
+    max_tokens: 8192,
   });
 
   const content = response.choices[0]?.message?.content;
