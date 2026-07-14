@@ -1,3 +1,5 @@
+import { APP_TIMEZONE } from './datetime.js';
+
 function sumDigits(value) {
   return String(value)
     .replace(/\D/g, '')
@@ -50,14 +52,42 @@ function placeSeed(data) {
   return hashLabel(data.birth_place_label || data.birth_place || '');
 }
 
+function formatDigitChain(parts, total, reduced) {
+  const joined = parts.join('+');
+  if (total === reduced) {
+    return `${joined}=${reduced}`;
+  }
+  return `${joined}=${total} → ${String(total).split('').join('+')}=${reduced}`;
+}
+
+function currentCalendarYear() {
+  return Number(
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone: APP_TIMEZONE,
+      year: 'numeric',
+    }).format(new Date()),
+  );
+}
+
 /** Детерминированные коды из анкеты — AI объясняет логику, но не меняет числа. */
 export function computePersonalityCodes(data) {
   const [day, month, year] = data.birth_date.split('.').map(Number);
   const [hour, minute] = data.birth_time.split(':').map(Number);
 
-  const lifePath = reduceNumber(sumDigits(day) + sumDigits(month) + sumDigits(year));
+  const lifePathSum = sumDigits(day) + sumDigits(month) + sumDigits(year);
+  const lifePath = reduceNumber(lifePathSum);
+  const birthdayNumber = reduceNumber(day);
   const nameNumber = nameDigitSum(data.name);
   const numerologyCode = `${lifePath}${nameNumber}`;
+
+  const personalYearCalendar = currentCalendarYear();
+  const personalYearSum = sumDigits(day) + sumDigits(month) + sumDigits(personalYearCalendar);
+  const personalYear = reduceNumber(personalYearSum);
+
+  const sucaiConsciousnessSum = sumDigits(day);
+  const sucaiConsciousness = reduceNumber(sucaiConsciousnessSum, false);
+  const sucaiMissionSum = lifePathSum;
+  const sucaiMission = reduceNumber(sucaiMissionSum, false);
 
   const genderOffset = data.gender === 'male' ? 11 : 13;
   const birthPlaceSeed = placeSeed(data);
@@ -71,12 +101,56 @@ export function computePersonalityCodes(data) {
 
   const fullCode = `${astrologyCode}${humanDesignCode}${numerologyCode}${sucaiCode}${jyotishCode}`;
 
+  const lifePathChain = formatDigitChain(
+    [
+      ...String(day).padStart(2, '0').split(''),
+      ...String(month).padStart(2, '0').split(''),
+      ...String(year).split(''),
+    ].map(Number),
+    lifePathSum,
+    lifePath,
+  );
+  const birthdayChain =
+    day === birthdayNumber
+      ? String(day)
+      : `${String(day).split('').join('+')}=${sumDigits(day)}${
+          sumDigits(day) === birthdayNumber ? '' : ` → ${birthdayNumber}`
+        }`;
+  const personalYearChain = formatDigitChain(
+    [
+      ...String(day).padStart(2, '0').split(''),
+      ...String(month).padStart(2, '0').split(''),
+      ...String(personalYearCalendar).split(''),
+    ].map(Number),
+    personalYearSum,
+    personalYear,
+  );
+  const sucaiConsciousnessChain =
+    day === sucaiConsciousness
+      ? String(day)
+      : formatDigitChain(String(day).split('').map(Number), sucaiConsciousnessSum, sucaiConsciousness);
+  const sucaiMissionChain = formatDigitChain(
+    [
+      ...String(day).padStart(2, '0').split(''),
+      ...String(month).padStart(2, '0').split(''),
+      ...String(year).split(''),
+    ].map(Number),
+    sucaiMissionSum,
+    sucaiMission,
+  );
+
   return {
     fullCode,
     astrologyCode,
     humanDesignCode,
     numerologyCode,
+    lifePathNumber: String(lifePath),
+    birthdayNumber: String(birthdayNumber),
+    personalYearNumber: String(personalYear),
+    personalYearCalendar: String(personalYearCalendar),
     sucaiCode,
+    sucaiConsciousnessNumber: String(sucaiConsciousness),
+    sucaiMissionNumber: String(sucaiMission),
     jyotishCode,
     astrologyFormula:
       `дата рождения ${data.birth_date}, время ${data.birth_time} и пол (${data.gender_label}) → код западной астрологии ${astrologyCode}`,
@@ -84,8 +158,18 @@ export function computePersonalityCodes(data) {
       `время рождения ${data.birth_time} и день×месяц (${day}×${month}) → код Human Design ${humanDesignCode}`,
     numerologyFormula:
       `число жизненного пути ${lifePath} (из даты ${data.birth_date}) + число имени ${nameNumber} (из «${data.name}») → ${numerologyCode}`,
+    lifePathFormula:
+      `сложи все цифры полной даты рождения ${data.birth_date}, сократи до одной цифры (мастер-числа 11/22/33 оставляй): ${lifePathChain} → Число Жизненного Пути ${lifePath}`,
+    birthdayNumberFormula:
+      `возьми день рождения ${day} и сократи до одной цифры (мастер-числа 11/22 оставляй): ${birthdayChain} → Число Даты Рождения ${birthdayNumber}`,
+    personalYearFormula:
+      `сложи день + месяц рождения + текущий календарный год ${personalYearCalendar}, сократи до одной цифры: ${personalYearChain} → Персональное Число Года ${personalYear}`,
     sucaiFormula:
       `дата рождения, имя «${data.name}» и энергия цифр 九宫术数 → код Сюцай ${sucaiCode}`,
+    sucaiConsciousnessFormula:
+      `сложи цифры дня рождения ${day} до одной цифры 1–9: ${sucaiConsciousnessChain} → Число Сознания ${sucaiConsciousness}`,
+    sucaiMissionFormula:
+      `сложи все цифры полной даты ${data.birth_date} до одной цифры 1–9: ${sucaiMissionChain} → Миссия ${sucaiMission}`,
     jyotishFormula:
       `место рождения (${data.birth_place_label}), дата и время → код ведической астрологии (Джойтиш) ${jyotishCode}`,
   };
