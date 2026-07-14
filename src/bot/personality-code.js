@@ -93,5 +93,28 @@ export async function generatePersonalityCode(data) {
 }
 
 export function splitPersonalityCodeReply(text) {
-  return splitMessage(text);
+  const raw = String(text ?? '').trim();
+  if (!raw) {
+    return [];
+  }
+
+  const marker = /💡\s*<b>\s*Общий вывод\s*<\/b>/i;
+  const match = raw.match(marker);
+
+  if (!match || match.index == null) {
+    return splitMessage(raw);
+  }
+
+  const main = raw.slice(0, match.index).trim();
+  const conclusion = raw.slice(match.index).trim();
+  const chunks = [];
+
+  if (main) {
+    chunks.push(...splitMessage(main));
+  }
+  if (conclusion) {
+    chunks.push(...splitMessage(conclusion));
+  }
+
+  return chunks.length ? chunks : splitMessage(raw);
 }
