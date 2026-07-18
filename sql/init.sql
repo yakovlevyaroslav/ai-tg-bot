@@ -210,10 +210,6 @@ CREATE TABLE IF NOT EXISTS broadcast_deliveries (
 CREATE INDEX IF NOT EXISTS idx_broadcast_campaigns_status
   ON broadcast_campaigns (status, created_at DESC);
 
-CREATE INDEX IF NOT EXISTS idx_broadcast_campaigns_scheduled
-  ON broadcast_campaigns (scheduled_at)
-  WHERE status = 'scheduled';
-
 CREATE INDEX IF NOT EXISTS idx_broadcast_deliveries_campaign_status
   ON broadcast_deliveries (campaign_id, status);
 
@@ -222,6 +218,10 @@ ALTER TABLE broadcast_campaigns
 
 ALTER TABLE broadcast_campaigns
   ADD COLUMN IF NOT EXISTS scheduled_at TIMESTAMPTZ;
+
+CREATE INDEX IF NOT EXISTS idx_broadcast_campaigns_scheduled
+  ON broadcast_campaigns (scheduled_at)
+  WHERE status = 'scheduled';
 
 ALTER TABLE broadcast_campaigns
   DROP CONSTRAINT IF EXISTS broadcast_campaigns_status_check;
