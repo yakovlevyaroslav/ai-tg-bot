@@ -4,6 +4,9 @@ import path from 'node:path';
 export const LOCAL_PHOTO_PREFIX = 'local:';
 export const BROADCAST_MEDIA_DIR = path.join(process.cwd(), 'data/broadcast-media');
 
+const VIDEO_EXTENSIONS = new Set(['.mp4', '.mov', '.m4v', '.webm']);
+const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif']);
+
 function safeBasename(value) {
   const name = path.basename(String(value ?? '').trim());
   if (!name || name === '.' || name === '..') {
@@ -57,12 +60,43 @@ export function resolveAdminPhotoPreviewUrl(photoRef) {
   return filename ? `/admin/broadcast/media/${encodeURIComponent(filename)}` : '';
 }
 
+function extensionFromRef(mediaRef) {
+  const raw = String(mediaRef ?? '').trim();
+  if (!raw) {
+    return '';
+  }
+
+  if (isLocalPhotoRef(raw)) {
+    return path.extname(raw.slice(LOCAL_PHOTO_PREFIX.length)).toLowerCase();
+  }
+
+  try {
+    const pathname = new URL(raw).pathname;
+    return path.extname(pathname).toLowerCase();
+  } catch {
+    return path.extname(raw).toLowerCase();
+  }
+}
+
+/** @returns {'photo' | 'video'} */
+export function detectBroadcastMediaKind(mediaRef) {
+  const ext = extensionFromRef(mediaRef);
+  if (VIDEO_EXTENSIONS.has(ext)) {
+    return 'video';
+  }
+  return 'photo';
+}
+
 export function getMediaContentType(filename) {
   const ext = path.extname(filename).toLowerCase();
   if (ext === '.png') return 'image/png';
   if (ext === '.webp') return 'image/webp';
   if (ext === '.gif') return 'image/gif';
-  return 'image/jpeg';
+  if (ext === '.mp4' || ext === '.m4v') return 'video/mp4';
+  if (ext === '.mov') return 'video/quicktime';
+  if (ext === '.webm') return 'video/webm';
+  if (IMAGE_EXTENSIONS.has(ext)) return 'image/jpeg';
+  return 'application/octet-stream';
 }
 
 export function resolveBroadcastPhoto(body = {}, file = null) {

@@ -6,6 +6,7 @@ import {
   getActiveBroadcastCampaign,
   markDeliveryFailed,
   markDeliverySent,
+  promoteDueScheduledCampaigns,
   promoteQueuedCampaign,
   refreshBroadcastCampaignCounters,
   setBroadcastCampaignStatus,
@@ -82,6 +83,8 @@ async function processCampaign(campaign) {
 
 async function tick() {
   try {
+    await promoteDueScheduledCampaigns();
+
     const campaign = await getActiveBroadcastCampaign();
     if (!campaign) {
       return;

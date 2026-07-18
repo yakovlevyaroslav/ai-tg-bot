@@ -184,12 +184,13 @@ CREATE TABLE IF NOT EXISTS broadcast_campaigns (
   filters JSONB NOT NULL DEFAULT '{}',
   sort_order TEXT NOT NULL DEFAULT 'created_at_desc',
   status TEXT NOT NULL DEFAULT 'draft'
-    CHECK (status IN ('draft', 'queued', 'running', 'paused', 'completed', 'cancelled')),
+    CHECK (status IN ('draft', 'scheduled', 'queued', 'running', 'paused', 'completed', 'cancelled')),
   total_recipients INT NOT NULL DEFAULT 0,
   sent_count INT NOT NULL DEFAULT 0,
   failed_count INT NOT NULL DEFAULT 0,
   skipped_count INT NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  scheduled_at TIMESTAMPTZ,
   started_at TIMESTAMPTZ,
   completed_at TIMESTAMPTZ
 );
@@ -209,11 +210,25 @@ CREATE TABLE IF NOT EXISTS broadcast_deliveries (
 CREATE INDEX IF NOT EXISTS idx_broadcast_campaigns_status
   ON broadcast_campaigns (status, created_at DESC);
 
+CREATE INDEX IF NOT EXISTS idx_broadcast_campaigns_scheduled
+  ON broadcast_campaigns (scheduled_at)
+  WHERE status = 'scheduled';
+
 CREATE INDEX IF NOT EXISTS idx_broadcast_deliveries_campaign_status
   ON broadcast_deliveries (campaign_id, status);
 
 ALTER TABLE broadcast_campaigns
   ADD COLUMN IF NOT EXISTS photo_file_id TEXT;
+
+ALTER TABLE broadcast_campaigns
+  ADD COLUMN IF NOT EXISTS scheduled_at TIMESTAMPTZ;
+
+ALTER TABLE broadcast_campaigns
+  DROP CONSTRAINT IF EXISTS broadcast_campaigns_status_check;
+
+ALTER TABLE broadcast_campaigns
+  ADD CONSTRAINT broadcast_campaigns_status_check
+    CHECK (status IN ('draft', 'scheduled', 'queued', 'running', 'paused', 'completed', 'cancelled'));
 
 CREATE TABLE IF NOT EXISTS broadcast_button_questions (
   id BIGSERIAL PRIMARY KEY,

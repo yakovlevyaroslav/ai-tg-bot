@@ -8,11 +8,13 @@ import {
   parseAudienceFilters,
 } from './broadcast-queries.js';
 import {
+  detectBroadcastMediaKind,
   isLocalPhotoRef,
   resolveAdminPhotoPreviewUrl,
   resolveCampaignPhotoPreviewUrl,
 } from '../../shared/broadcast/media.js';
 import { BROADCAST_MEDIA_MAX_BYTES } from './broadcast-media.js';
+import { BROADCAST_SCHEDULE_TIMEZONE, formatDateTime } from '../../shared/datetime.js';
 import {
   esc,
   formatDate,
@@ -26,6 +28,7 @@ import { POPULAR_QUESTIONS } from '../../bot/post-onboarding.js';
 
 const STATUS_LABELS = {
   draft: 'Черновик',
+  scheduled: 'По таймеру',
   queued: 'В очереди',
   running: 'Отправляется',
   paused: 'Пауза',
@@ -255,6 +258,12 @@ function campaignRows(campaigns) {
       const done = Number(c.sent_count) + Number(c.failed_count) + Number(c.skipped_count);
       const progress =
         c.total_recipients > 0 ? Math.round((done / c.total_recipients) * 100) : 0;
+      const when =
+        c.status === 'scheduled' && c.scheduled_at
+          ? formatDateTime(c.scheduled_at)
+          : c.started_at
+            ? formatDate(c.started_at)
+            : formatDate(c.created_at);
 
       return `<tr>
         <td><a href="/admin/broadcast/${c.id}">#${c.id}</a></td>
@@ -263,10 +272,93 @@ function campaignRows(campaigns) {
         <td>${esc(c.sent_count)} / ${esc(c.total_recipients)} (${progress}%)</td>
         <td>${esc(c.failed_count)}</td>
         <td>${esc(c.skipped_count)}</td>
-        <td>${formatDate(c.created_at)}</td>
+        <td>${esc(when)}</td>
       </tr>`;
     })
     .join('');
+}
+
+function renderMessageFormatHelp() {
+  return `
+    <div class="broadcast-format-help">
+      <p class="muted-text" style="margin:0 0 0.5rem">Оформление текста (HTML). Пишите теги прямо в тексте:</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Как написать</th><th>Что получится</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><code>&lt;b&gt;жирный текст&lt;/b&gt;</code></td>
+              <td><b>жирный текст</b></td>
+            </tr>
+            <tr>
+              <td><code>&lt;i&gt;курсив&lt;/i&gt;</code></td>
+              <td><i>курсив</i></td>
+            </tr>
+            <tr>
+              <td><code>&lt;u&gt;подчёркнутый&lt;/u&gt;</code></td>
+              <td><u>подчёркнутый</u></td>
+            </tr>
+            <tr>
+              <td><code>&lt;s&gt;зачёркнутый&lt;/s&gt;</code></td>
+              <td><s>зачёркнутый</s></td>
+            </tr>
+            <tr>
+              <td><code>&lt;a href="https://example.com"&gt;ссылка&lt;/a&gt;</code></td>
+              <td>кликабельная ссылка</td>
+            </tr>
+            <tr>
+              <td><code>&lt;code&gt;код&lt;/code&gt;</code></td>
+              <td>моноширинный фрагмент</td>
+            </tr>
+            <tr>
+              <td><code>&lt;blockquote&gt;цитата&lt;/blockquote&gt;</code></td>
+              <td>цитата (как в Telegram)</td>
+            </tr>
+            <tr>
+              <td><code>&lt;blockquote expandable&gt;длинная цитата&lt;/blockquote&gt;</code></td>
+              <td>сворачиваемая цитата</td>
+            </tr>
+            <tr>
+              <td><code>{name}</code></td>
+              <td>имя пользователя из анкеты / Telegram</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <pre class="broadcast-format-example">Привет, {name}!
+
+&lt;b&gt;Специальное предложение&lt;/b&gt; только сегодня.
+&lt;i&gt;Успей забрать до вечера.&lt;/i&gt;
+
+&lt;blockquote&gt;Подсказка: зайди в «Вопросы» и спроси про отношения.&lt;/blockquote&gt;
+
+Подробнее: &lt;a href="https://personality-code.ru"&gt;на сайте&lt;/a&gt;</pre>
+    </div>`;
+}
+
+function renderScheduleFields(query = {}) {
+  const mode = String(query.send_mode ?? 'now') === 'scheduled' ? 'scheduled' : 'now';
+  const scheduledValue = esc(query.scheduled_at_local ?? '');
+
+  return `
+    <label class="export-field export-field-wide">
+      <span>Когда отправить</span>
+      <div class="broadcast-schedule-modes">
+        <label class="export-field-check">
+          <input type="radio" name="send_mode" value="now"${mode === 'now' ? ' checked' : ''} id="send-mode-now">
+          <span>Сейчас</span>
+        </label>
+        <label class="export-field-check">
+          <input type="radio" name="send_mode" value="scheduled"${mode === 'scheduled' ? ' checked' : ''} id="send-mode-scheduled">
+          <span>По таймеру</span>
+        </label>
+      </div>
+    </label>
+    <label class="export-field export-field-wide" id="scheduled-at-field"${mode === 'scheduled' ? '' : ' hidden'}>
+      <span>Дата и время отправки <strong>(московское время, ${BROADCAST_SCHEDULE_TIMEZONE})</strong></span>
+      <input type="datetime-local" name="scheduled_at_local" id="scheduled-at-input" value="${scheduledValue}">
+      <span class="muted-text">Указывайте именно московское время. Например: 18:00 по Москве.</span>
+    </label>`;
 }
 
 function renderPhotoFields(query = {}) {
@@ -274,26 +366,32 @@ function renderPhotoFields(query = {}) {
     String(query.photo_local ?? '').trim() ||
     (isLocalPhotoRef(query.photo_url) ? String(query.photo_url).trim() : '');
   const previewUrl = resolveAdminPhotoPreviewUrl(photoLocal);
+  const isVideoPreview = detectBroadcastMediaKind(photoLocal) === 'video';
   const externalUrl = isLocalPhotoRef(query.photo_url) ? '' : String(query.photo_url ?? '');
+  const maxMb = Math.round(BROADCAST_MEDIA_MAX_BYTES / (1024 * 1024));
 
   return `
     <label class="export-field export-field-wide">
-      <span>Картинка — загрузить файл</span>
-      <input type="file" name="photo_file" accept="image/jpeg,image/png,image/webp,image/gif">
-      <span class="muted-text">JPEG, PNG, WebP или GIF · до ${Math.round(BROADCAST_MEDIA_MAX_BYTES / (1024 * 1024))} МБ</span>
+      <span>Медиа — загрузить файл</span>
+      <input type="file" name="photo_file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/quicktime,video/webm,.mp4,.mov,.m4v,.webm">
+      <span class="muted-text">JPEG, PNG, WebP, GIF или видео MP4/MOV/WebM · до ${maxMb} МБ</span>
     </label>
     ${
       previewUrl
         ? `<div class="broadcast-photo-preview">
-             <img src="${esc(previewUrl)}" alt="Текущая картинка">
-             <p class="muted-text">Картинка сохранена. Чтобы заменить — выберите новый файл.</p>
+             ${
+               isVideoPreview
+                 ? `<video src="${esc(previewUrl)}" controls preload="metadata"></video>`
+                 : `<img src="${esc(previewUrl)}" alt="Текущее медиа">`
+             }
+             <p class="muted-text">Файл сохранён. Чтобы заменить — выберите новый.</p>
            </div>
            <input type="hidden" name="photo_local" value="${esc(photoLocal)}">`
         : ''
     }
     <label class="export-field export-field-wide">
-      <span>Или URL картинки (если файл не загружаете)</span>
-      <input type="url" name="photo_url" value="${esc(externalUrl)}" placeholder="https://example.com/image.jpg">
+      <span>Или URL картинки / видео (если файл не загружаете)</span>
+      <input type="url" name="photo_url" value="${esc(externalUrl)}" placeholder="https://example.com/image.jpg или video.mp4">
     </label>`;
 }
 
@@ -576,12 +674,14 @@ export function renderBroadcastFormPage({ query = {}, campaigns = [], flash = ''
             <input type="text" name="name" required maxlength="120" value="${esc(query.name ?? '')}" placeholder="Например: Акция на тарифы">
           </label>
           <label class="export-field export-field-wide">
-            <span>Текст (HTML: &lt;b&gt;, &lt;i&gt;, &lt;a href=""&gt; · плейсхолдер <code>{name}</code>)</span>
+            <span>Текст сообщения</span>
             <textarea name="message_text" class="broadcast-textarea" required placeholder="Текст рассылки…">${esc(query.message_text ?? '')}</textarea>
           </label>
+          ${renderMessageFormatHelp()}
+          ${renderScheduleFields(query)}
         `,
         )}
-        ${exportFilterSection('Картинка', renderPhotoFields(query))}
+        ${exportFilterSection('Медиа', renderPhotoFields(query))}
         ${exportFilterSection(
           'Кнопки',
           `
@@ -632,8 +732,8 @@ export function renderBroadcastFormPage({ query = {}, campaigns = [], flash = ''
       <div class="export-actions" style="padding:0 1rem 1.25rem">
         <button type="submit" name="action" value="test" class="btn">Тест себе</button>
         <button type="submit" name="action" value="start" class="btn btn-success"
-                onclick="return confirm('Запустить рассылку? Сообщения начнут уходить получателям.');">
-          Запустить рассылку
+                onclick="return confirm(document.getElementById('send-mode-scheduled')?.checked ? 'Запланировать рассылку на указанное московское время?' : 'Запустить рассылку сейчас? Сообщения начнут уходить получателям.');">
+          Запустить / запланировать
         </button>
       </div>
     </form>
@@ -645,7 +745,7 @@ export function renderBroadcastFormPage({ query = {}, campaigns = [], flash = ''
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th>ID</th><th>Название</th><th>Статус</th><th>Прогресс</th><th>Ошибки</th><th>Пропущено</th><th>Создана</th></tr>
+            <tr><th>ID</th><th>Название</th><th>Статус</th><th>Прогресс</th><th>Ошибки</th><th>Пропущено</th><th>Старт / таймер</th></tr>
           </thead>
           <tbody>${campaignRows(campaigns)}</tbody>
         </table>
@@ -657,19 +757,31 @@ export function renderBroadcastFormPage({ query = {}, campaigns = [], flash = ''
         const stageSelect = document.getElementById('audience-stage');
         const stepSelect = document.getElementById('onboarding-step-select');
         const stepField = document.getElementById('onboarding-step-field');
-        if (!stageSelect || !stepSelect || !stepField) return;
-
-        function syncOnboardingStepField() {
-          const enabled = stageSelect.value === 'in_progress';
-          stepSelect.disabled = !enabled;
-          stepField.classList.toggle('export-field-disabled', !enabled);
-          if (!enabled) {
-            stepSelect.value = '';
+        if (stageSelect && stepSelect && stepField) {
+          function syncOnboardingStepField() {
+            const enabled = stageSelect.value === 'in_progress';
+            stepSelect.disabled = !enabled;
+            stepField.classList.toggle('export-field-disabled', !enabled);
+            if (!enabled) {
+              stepSelect.value = '';
+            }
           }
+
+          stageSelect.addEventListener('change', syncOnboardingStepField);
+          syncOnboardingStepField();
         }
 
-        stageSelect.addEventListener('change', syncOnboardingStepField);
-        syncOnboardingStepField();
+        const scheduleField = document.getElementById('scheduled-at-field');
+        const modeNow = document.getElementById('send-mode-now');
+        const modeScheduled = document.getElementById('send-mode-scheduled');
+        function syncScheduleField() {
+          if (!scheduleField) return;
+          const scheduled = Boolean(modeScheduled?.checked);
+          scheduleField.hidden = !scheduled;
+        }
+        modeNow?.addEventListener('change', syncScheduleField);
+        modeScheduled?.addEventListener('change', syncScheduleField);
+        syncScheduleField();
       })();
     </script>`;
 }
@@ -691,6 +803,8 @@ export function renderBroadcastStatusPage({
   const progress =
     campaign.total_recipients > 0 ? Math.round((done / campaign.total_recipients) * 100) : 0;
   const photoPreview = resolveCampaignPhotoPreviewUrl(campaign.photo_url);
+  const mediaKind = detectBroadcastMediaKind(campaign.photo_url);
+  const mediaLabel = mediaKind === 'video' ? 'Видео' : 'Фото';
   const sortLabel =
     BROADCAST_SORT_OPTIONS.find((option) => option.value === campaign.sort_order)?.label ??
     campaign.sort_order;
@@ -712,7 +826,12 @@ export function renderBroadcastStatusPage({
                  onsubmit="return confirm('Отменить рассылку?');">
              <button type="submit" class="btn btn-danger btn-sm">Отменить</button>
            </form>`
-        : '';
+        : campaign.status === 'scheduled' || campaign.status === 'queued'
+          ? `<form method="post" action="/admin/broadcast/${campaign.id}/cancel" style="display:inline"
+                 onsubmit="return confirm('Отменить рассылку?');">
+               <button type="submit" class="btn btn-danger btn-sm">Отменить</button>
+             </form>`
+          : '';
 
   const filterRows = filtersDescription.length
     ? filtersDescription
@@ -776,6 +895,7 @@ export function renderBroadcastStatusPage({
 
     <div class="toolbar">${controls}
       ${campaign.status === 'running' || campaign.status === 'queued' ? '<span class="muted-text">Воркер бота отправляет сообщения каждые несколько секунд</span>' : ''}
+      ${campaign.status === 'scheduled' ? '<span class="muted-text">Ожидает московского времени запуска — отправка начнётся автоматически</span>' : ''}
       <a href="/admin/broadcast/${campaign.id}" class="btn btn-ghost btn-sm">Обновить</a>
     </div>
 
@@ -790,12 +910,18 @@ export function renderBroadcastStatusPage({
         ${detailItem('В очереди', esc(pendingCount))}
         ${detailItem('Прогресс', `${progress}% (${done} / ${campaign.total_recipients})`)}
         ${detailItem('Создана', formatDate(campaign.created_at))}
+        ${detailItem(
+          'Таймер (МСК)',
+          campaign.scheduled_at
+            ? `${esc(formatDateTime(campaign.scheduled_at))} · ${BROADCAST_SCHEDULE_TIMEZONE}`
+            : '—',
+        )}
         ${detailItem('Старт', campaign.started_at ? formatDate(campaign.started_at) : '—')}
         ${detailItem('Завершена', campaign.completed_at ? formatDate(campaign.completed_at) : '—')}
         ${detailItem('Сортировка', esc(sortLabel))}
         ${detailItem('Parse mode', esc(campaign.parse_mode || 'HTML'))}
-        ${detailItem('Фото (URL)', campaign.photo_url ? `<a href="${esc(campaign.photo_url)}" target="_blank" rel="noopener">${esc(campaign.photo_url)}</a>` : '—')}
-        ${detailItem('Фото (file_id)', esc(campaign.photo_file_id || '—'))}
+        ${detailItem(`${mediaLabel} (URL)`, campaign.photo_url ? `<a href="${esc(campaign.photo_url)}" target="_blank" rel="noopener">${esc(campaign.photo_url)}</a>` : '—')}
+        ${detailItem(`${mediaLabel} (file_id)`, esc(campaign.photo_file_id || '—'))}
       </div>
       <div style="padding:0 1rem 1rem">
         <div class="muted-text" style="margin-bottom:6px">Прогресс отправки</div>
@@ -821,7 +947,11 @@ export function renderBroadcastStatusPage({
       ${
         photoPreview
           ? `<div class="broadcast-photo-preview" style="padding:0 1rem 1rem">
-               <img src="${esc(photoPreview)}" alt="Картинка рассылки">
+               ${
+                 mediaKind === 'video'
+                   ? `<video src="${esc(photoPreview)}" controls preload="metadata"></video>`
+                   : `<img src="${esc(photoPreview)}" alt="Медиа рассылки">`
+               }
              </div>`
           : ''
       }

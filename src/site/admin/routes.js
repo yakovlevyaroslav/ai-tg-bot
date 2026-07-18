@@ -36,6 +36,11 @@ import {
   resumeBroadcastCampaign,
 } from '../../shared/broadcast/worker.js';
 import {
+  BROADCAST_SCHEDULE_TIMEZONE,
+  formatDateTime,
+  parseDateTimeLocalInTimeZone,
+} from '../../shared/datetime.js';
+import {
   broadcastUploadMiddleware,
   getUploadErrorMessage,
   resolveBroadcastPhoto,
@@ -1093,6 +1098,8 @@ export function createAdminRouter() {
       buttonUtm,
       replyMarkup,
       filters: broadcastQueries.parseAudienceFilters(body),
+      sendMode: String(body.send_mode ?? 'now') === 'scheduled' ? 'scheduled' : 'now',
+      scheduledAtLocal: String(body.scheduled_at_local ?? '').trim(),
     };
   }
 
@@ -1101,6 +1108,8 @@ export function createAdminRouter() {
       ...body,
       photo_url: parsed.photoUrl || '',
       photo_local: parsed.photoLocal || '',
+      send_mode: parsed.sendMode || 'now',
+      scheduled_at_local: parsed.scheduledAtLocal || '',
       utm_source: parsed.buttonUtm?.utm_source ?? '',
       utm_medium: parsed.buttonUtm?.utm_medium ?? '',
       utm_campaign: parsed.buttonUtm?.utm_campaign ?? '',
@@ -1156,7 +1165,12 @@ export function createAdminRouter() {
 
     const filters = broadcastQueries.normalizeCampaignFilters(updated.filters);
     const filtersDescription = broadcastQueries.describeAudienceFilters(filters);
-    const flash = req.query.ok ? broadcastFlash('success', 'Статус обновлён') : '';
+    const flash = req.query.ok
+      ? broadcastFlash(
+          'success',
+          req.query.ok === '1' ? 'Статус обновлён' : String(req.query.ok),
+        )
+      : '';
 
     const body = renderBroadcastStatusPage({
       campaign: updated,
@@ -1267,6 +1281,38 @@ export function createAdminRouter() {
         return;
       }
 
+      let scheduledAt = null;
+      if (parsed.sendMode === 'scheduled') {
+        scheduledAt = parseDateTimeLocalInTimeZone(
+          parsed.scheduledAtLocal,
+          BROADCAST_SCHEDULE_TIMEZONE,
+        );
+        if (!scheduledAt) {
+          const body = renderBroadcastFormPage({
+            query: formQuery,
+            campaigns,
+            flash: broadcastFlash(
+              'error',
+              'Укажите дату и время отправки (московское время)',
+            ),
+          });
+          res.type('html').send(layout('Рассылка', 'broadcast', body));
+          return;
+        }
+        if (scheduledAt.getTime() <= Date.now() + 60_000) {
+          const body = renderBroadcastFormPage({
+            query: formQuery,
+            campaigns,
+            flash: broadcastFlash(
+              'error',
+              'Время отправки должно быть хотя бы на минуту позже текущего (по Москве)',
+            ),
+          });
+          res.type('html').send(layout('Рассылка', 'broadcast', body));
+          return;
+        }
+      }
+
       try {
         const campaign = await broadcastQueries.createBroadcastCampaign({
           name: parsed.name,
@@ -1276,9 +1322,18 @@ export function createAdminRouter() {
           replyMarkup: parsed.replyMarkup,
           filters: parsed.filters,
           sortOrder: parsed.filters.sortOrder,
+          scheduledAt,
         });
 
-        res.redirect(`/admin/broadcast/${campaign.id}?ok=1`);
+        const okMsg =
+          campaign.status === 'scheduled'
+            ? `Рассылка #${campaign.id} запланирована на ${formatDateTime(campaign.scheduled_at)} (МСК)`
+            : '1';
+        res.redirect(
+          campaign.status === 'scheduled'
+            ? `/admin/broadcast/${campaign.id}?ok=${encodeURIComponent(okMsg)}`
+            : `/admin/broadcast/${campaign.id}?ok=1`,
+        );
         return;
       } catch (err) {
         const message =

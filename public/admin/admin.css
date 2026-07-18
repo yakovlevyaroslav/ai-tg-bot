@@ -587,11 +587,35 @@ input[type='date'] {
   font-size: 0.9rem;
 }
 
-.broadcast-photo-preview {
-  padding: 0 1.15rem 0.75rem;
+.broadcast-format-help {
+  padding: 0 1.15rem 1rem;
 }
 
-.broadcast-photo-preview img {
+.broadcast-format-help .table-wrap {
+  margin-bottom: 0.75rem;
+}
+
+.broadcast-format-example {
+  margin: 0;
+  padding: 0.85rem 1rem;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-x: auto;
+}
+
+.broadcast-schedule-modes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-top: 0.35rem;
+}
+
+.broadcast-photo-preview img,
+.broadcast-photo-preview video {
   display: block;
   max-width: 320px;
   max-height: 240px;
@@ -599,6 +623,12 @@ input[type='date'] {
   height: auto;
   border-radius: 8px;
   border: 1px solid var(--border);
+}
+
+.broadcast-photo-preview video {
+  max-width: min(480px, 100%);
+  max-height: 320px;
+  background: #0f172a;
 }
 
 input[type='file'] {

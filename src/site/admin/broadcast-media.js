@@ -23,15 +23,28 @@ export {
   getMediaContentType,
 } from '../../shared/broadcast/media.js';
 
-export const BROADCAST_MEDIA_MAX_BYTES = 5 * 1024 * 1024;
+export const BROADCAST_MEDIA_MAX_BYTES = 100 * 1024 * 1024;
 
-const ALLOWED_MIME = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+const ALLOWED_MIME = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+  'video/mp4',
+  'video/quicktime',
+  'video/webm',
+  'video/x-m4v',
+]);
 
 const EXT_BY_MIME = {
   'image/jpeg': '.jpg',
   'image/png': '.png',
   'image/webp': '.webp',
   'image/gif': '.gif',
+  'video/mp4': '.mp4',
+  'video/quicktime': '.mov',
+  'video/webm': '.webm',
+  'video/x-m4v': '.m4v',
 };
 
 export const broadcastPhotoUpload = multer({
@@ -48,7 +61,7 @@ export const broadcastPhotoUpload = multer({
       const ext =
         path.extname(file.originalname)?.toLowerCase() ||
         EXT_BY_MIME[file.mimetype] ||
-        '.jpg';
+        '.bin';
       cb(null, `${randomUUID()}${ext}`);
     },
   }),
@@ -58,7 +71,7 @@ export const broadcastPhotoUpload = multer({
   },
   fileFilter(_req, file, cb) {
     if (!ALLOWED_MIME.has(file.mimetype)) {
-      cb(new Error('Допустимы только JPEG, PNG, WebP или GIF до 5 МБ'));
+      cb(new Error('Допустимы JPEG, PNG, WebP, GIF или видео MP4/MOV/WebM до 100 МБ'));
       return;
     }
     cb(null, true);
@@ -70,7 +83,7 @@ export function broadcastUploadMiddleware(req, res, next) {
     if (err) {
       req.uploadError =
         err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE'
-          ? 'Файл слишком большой (максимум 5 МБ)'
+          ? 'Файл слишком большой (максимум 100 МБ)'
           : err?.message ?? 'Не удалось загрузить файл';
     }
     next();

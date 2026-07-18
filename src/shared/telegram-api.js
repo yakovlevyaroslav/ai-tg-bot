@@ -1,16 +1,20 @@
 import './dns-ipv4-first.js';
+import fs from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { Agent, ProxyAgent, fetch as undiciFetch } from 'undici';
 import { config } from './config.js';
 import { BOT_REPLY_PARSE_MODE, splitFormattedMessage } from './telegram-format.js';
 import {
+  detectBroadcastMediaKind,
+  getMediaContentType,
   isLocalPhotoRef,
   resolveLocalPhotoPath,
 } from './broadcast/media.js';
 
 const API_BASE = `https://api.telegram.org/bot${config.telegramToken}`;
 const TIMEOUT_MS = Number(process.env.TELEGRAM_API_TIMEOUT_MS || 30000);
+const MULTIPART_TIMEOUT_MS = Number(process.env.TELEGRAM_MEDIA_UPLOAD_TIMEOUT_MS || 600000);
 
 let cachedDispatcher = null;
 
@@ -68,15 +72,31 @@ function formatTelegramNetworkError(err) {
 
 async function telegramFetch(url, init = {}) {
   try {
-    return await undiciFetch(url, { ...init, dispatcher: getDispatcher() });
+    return await undiciFetch(url, {
+      ...init,
+      dispatcher: init.dispatcher ?? getDispatcher(),
+    });
   } catch (err) {
     return { networkError: formatTelegramNetworkError(err) };
   }
 }
 
+async function fileToBlob(filePath, mime) {
+  if (typeof fs.openAsBlob === 'function') {
+    try {
+      return await fs.openAsBlob(filePath, { type: mime });
+    } catch {
+      // fallback below
+    }
+  }
+  const buffer = await readFile(filePath);
+  return new Blob([buffer], { type: mime });
+}
+
 async function callTelegramMultipart(method, fields, fileField, filePath) {
   const form = new FormData();
   const filename = path.basename(filePath);
+  const mime = getMediaContentType(filename);
 
   for (const [key, value] of Object.entries(fields)) {
     if (value != null && value !== '') {
@@ -84,22 +104,28 @@ async function callTelegramMultipart(method, fields, fileField, filePath) {
     }
   }
 
-  const buffer = await readFile(filePath);
-  const ext = path.extname(filename).toLowerCase();
-  const mime =
-    ext === '.png'
-      ? 'image/png'
-      : ext === '.webp'
-        ? 'image/webp'
-        : ext === '.gif'
-          ? 'image/gif'
-          : 'image/jpeg';
-
-  form.append(fileField, new Blob([buffer], { type: mime }), filename);
+  const blob = await fileToBlob(filePath, mime);
+  form.append(fileField, blob, filename);
 
   const response = await telegramFetch(`${API_BASE}/${method}`, {
     method: 'POST',
     body: form,
+    dispatcher: (() => {
+      const connect = { family: 4, timeout: MULTIPART_TIMEOUT_MS };
+      if (config.telegramApiProxy) {
+        return new ProxyAgent({
+          uri: config.telegramApiProxy,
+          connect,
+          bodyTimeout: MULTIPART_TIMEOUT_MS,
+          headersTimeout: MULTIPART_TIMEOUT_MS,
+        });
+      }
+      return new Agent({
+        connect,
+        bodyTimeout: MULTIPART_TIMEOUT_MS,
+        headersTimeout: MULTIPART_TIMEOUT_MS,
+      });
+    })(),
   });
 
   if (response.networkError) {
@@ -127,7 +153,11 @@ function extractPhotoFileId(result) {
   return photos[photos.length - 1]?.file_id ?? null;
 }
 
-function buildPhotoRequestFields(chatId, captionText, parseMode, replyMarkup, { stringifyMarkup = false } = {}) {
+function extractVideoFileId(result) {
+  return result?.video?.file_id ?? null;
+}
+
+function buildMediaCaptionFields(chatId, captionText, parseMode, replyMarkup, { stringifyMarkup = false } = {}) {
   const fields = { chat_id: chatId };
 
   if (captionText) {
@@ -279,71 +309,78 @@ export async function sendTelegramMessage({
   return lastResult ?? { ok: true };
 }
 
-export async function sendTelegramPhoto({
+async function sendTelegramMediaMessage({
   chatId,
-  photoUrl = '',
-  photoFileId = '',
+  mediaUrl = '',
+  mediaFileId = '',
+  mediaKind = 'photo',
   caption = '',
   parseMode = BOT_REPLY_PARSE_MODE,
   replyMarkup = null,
 }) {
   const captionText = String(caption ?? '').trim();
+  const isVideo = mediaKind === 'video';
+  const method = isVideo ? 'sendVideo' : 'sendPhoto';
+  const field = isVideo ? 'video' : 'photo';
+  const missingLocal = isVideo
+    ? 'Файл видео не найден на сервере'
+    : 'Файл картинки не найден на сервере';
   let result;
 
-  if (photoFileId) {
-    result = await callTelegram('sendPhoto', {
-      ...buildPhotoRequestFields(chatId, captionText, parseMode, replyMarkup),
-      photo: photoFileId,
+  if (mediaFileId) {
+    result = await callTelegram(method, {
+      ...buildMediaCaptionFields(chatId, captionText, parseMode, replyMarkup),
+      [field]: mediaFileId,
     });
-  } else if (isLocalPhotoRef(photoUrl)) {
-    const filePath = resolveLocalPhotoPath(photoUrl);
+  } else if (isLocalPhotoRef(mediaUrl)) {
+    const filePath = resolveLocalPhotoPath(mediaUrl);
     if (!filePath) {
-      return { ok: false, description: 'Файл картинки не найден на сервере' };
+      return { ok: false, description: missingLocal };
     }
 
     result = await callTelegramMultipart(
-      'sendPhoto',
-      buildPhotoRequestFields(chatId, captionText, parseMode, replyMarkup, {
+      method,
+      buildMediaCaptionFields(chatId, captionText, parseMode, replyMarkup, {
         stringifyMarkup: true,
       }),
-      'photo',
+      field,
       filePath,
     );
   } else {
-    result = await callTelegram('sendPhoto', {
-      ...buildPhotoRequestFields(chatId, captionText, parseMode, replyMarkup),
-      photo: photoUrl,
+    result = await callTelegram(method, {
+      ...buildMediaCaptionFields(chatId, captionText, parseMode, replyMarkup),
+      [field]: mediaUrl,
     });
   }
 
   if (!result.ok && parseMode && captionText) {
     const plainCaption = captionText.slice(0, 1024).replace(/<[^>]+>/g, '');
 
-    if (photoFileId) {
-      result = await callTelegram('sendPhoto', {
+    if (mediaFileId) {
+      result = await callTelegram(method, {
         chat_id: chatId,
-        photo: photoFileId,
+        [field]: mediaFileId,
         caption: plainCaption,
         ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
       });
-    } else if (isLocalPhotoRef(photoUrl)) {
-      const filePath = resolveLocalPhotoPath(photoUrl);
+    } else if (isLocalPhotoRef(mediaUrl)) {
+      const filePath = resolveLocalPhotoPath(mediaUrl);
       if (filePath) {
         result = await callTelegramMultipart(
-          'sendPhoto',
+          method,
           {
             chat_id: chatId,
             caption: plainCaption,
             ...(replyMarkup ? { reply_markup: JSON.stringify(replyMarkup) } : {}),
           },
-          'photo',
+          field,
           filePath,
         );
       }
     } else {
-      result = await callTelegram('sendPhoto', {
+      result = await callTelegram(method, {
         chat_id: chatId,
-        photo: photoUrl,
+        [field]: mediaUrl,
         caption: plainCaption,
         ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
       });
@@ -365,7 +402,50 @@ export async function sendTelegramPhoto({
     }
   }
 
-  return { ...result, fileId: extractPhotoFileId(result.result) };
+  return {
+    ...result,
+    fileId: isVideo
+      ? extractVideoFileId(result.result)
+      : extractPhotoFileId(result.result),
+  };
+}
+
+export async function sendTelegramPhoto({
+  chatId,
+  photoUrl = '',
+  photoFileId = '',
+  caption = '',
+  parseMode = BOT_REPLY_PARSE_MODE,
+  replyMarkup = null,
+}) {
+  return sendTelegramMediaMessage({
+    chatId,
+    mediaUrl: photoUrl,
+    mediaFileId: photoFileId,
+    mediaKind: 'photo',
+    caption,
+    parseMode,
+    replyMarkup,
+  });
+}
+
+export async function sendTelegramVideo({
+  chatId,
+  videoUrl = '',
+  videoFileId = '',
+  caption = '',
+  parseMode = BOT_REPLY_PARSE_MODE,
+  replyMarkup = null,
+}) {
+  return sendTelegramMediaMessage({
+    chatId,
+    mediaUrl: videoUrl,
+    mediaFileId: videoFileId,
+    mediaKind: 'video',
+    caption,
+    parseMode,
+    replyMarkup,
+  });
 }
 
 /** @deprecated Локальные фото кэшируются воркером при первой отправке получателю (без пинга админу). */
@@ -380,10 +460,10 @@ export async function cacheTelegramPhotoFileId(photoRef) {
     return null;
   }
 
-  const result = await sendTelegramPhoto({
+  const result = await sendTelegramBroadcast({
     chatId: adminIds[0],
+    text: '\u200b',
     photoUrl: photoRef,
-    caption: '\u200b',
   });
 
   return result.ok ? result.fileId ?? null : null;
@@ -397,13 +477,15 @@ export async function sendTelegramBroadcast({
   parseMode = BOT_REPLY_PARSE_MODE,
   replyMarkup = null,
 }) {
-  const photo = String(photoUrl ?? '').trim();
+  const media = String(photoUrl ?? '').trim();
 
-  if (photo || photoFileId) {
-    return sendTelegramPhoto({
+  if (media || photoFileId) {
+    const mediaKind = detectBroadcastMediaKind(media || photoFileId);
+    return sendTelegramMediaMessage({
       chatId,
-      photoUrl: photo,
-      photoFileId,
+      mediaUrl: media,
+      mediaFileId: photoFileId,
+      mediaKind,
       caption: text,
       parseMode,
       replyMarkup,

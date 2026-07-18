@@ -244,6 +244,7 @@ export async function createBroadcastCampaign({
   replyMarkup = null,
   filters,
   sortOrder = 'created_at_desc',
+  scheduledAt = null,
 }) {
   const pool = getPool();
   const client = await pool.connect();
@@ -262,11 +263,13 @@ export async function createBroadcastCampaign({
       );
     }
 
+    const status = scheduledAt ? 'scheduled' : 'queued';
+
     const { rows: campaignRows } = await client.query(
       `INSERT INTO broadcast_campaigns (
          name, message_text, photo_url, photo_file_id, reply_markup, filters, sort_order,
-         status, total_recipients
-       ) VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, 'queued', $8)
+         status, total_recipients, scheduled_at
+       ) VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, $8, $9, $10)
        RETURNING *`,
       [
         name,
@@ -276,7 +279,9 @@ export async function createBroadcastCampaign({
         replyMarkup ? JSON.stringify(replyMarkup) : null,
         JSON.stringify(filters),
         sortOrder,
+        status,
         total,
+        scheduledAt,
       ],
     );
 
@@ -562,6 +567,20 @@ export async function getActiveBroadcastCampaign() {
      LIMIT 1`,
   );
   return rows[0] ?? null;
+}
+
+/** Переводит due scheduled → queued (время уже наступило). */
+export async function promoteDueScheduledCampaigns() {
+  const pool = getPool();
+  const { rows } = await pool.query(
+    `UPDATE broadcast_campaigns
+     SET status = 'queued'
+     WHERE status = 'scheduled'
+       AND scheduled_at IS NOT NULL
+       AND scheduled_at <= NOW()
+     RETURNING id`,
+  );
+  return rows.map((row) => row.id);
 }
 
 export async function claimPendingDeliveries(campaignId, limit) {
