@@ -323,8 +323,8 @@ async function sendTelegramMediaMessage({
   const method = isVideo ? 'sendVideo' : 'sendPhoto';
   const field = isVideo ? 'video' : 'photo';
   const missingLocal = isVideo
-    ? 'Файл видео не найден на сервере'
-    : 'Файл картинки не найден на сервере';
+    ? 'Файл видео не найден на сервере (local:…). При двух VPS медиа нужно кэшировать в file_id на сайте при создании рассылки.'
+    : 'Файл картинки не найден на сервере (local:…). При двух VPS медиа нужно кэшировать в file_id на сайте при создании рассылки.';
   let result;
 
   if (mediaFileId) {
@@ -448,25 +448,64 @@ export async function sendTelegramVideo({
   });
 }
 
-/** @deprecated Локальные фото кэшируются воркером при первой отправке получателю (без пинга админу). */
-export async function cacheTelegramPhotoFileId(photoRef) {
-  if (!isLocalPhotoRef(photoRef)) {
-    return null;
+/**
+ * Загружает локальный файл (local:…) в Telegram и возвращает file_id.
+ * Нужно на сервере сайта: файл лежит в data/broadcast-media, а воркер бота
+ * на другом VPS этого файла не видит — отправка идёт по file_id.
+ */
+export async function cacheBroadcastMediaFileId(mediaRef) {
+  if (!isLocalPhotoRef(mediaRef)) {
+    return { ok: false, fileId: null, description: 'Не локальный файл' };
+  }
+
+  if (!resolveLocalPhotoPath(mediaRef)) {
+    return {
+      ok: false,
+      fileId: null,
+      description: 'Файл медиа не найден на сервере сайта (data/broadcast-media)',
+    };
   }
 
   const adminIds = config.adminTelegramIds.filter(Number.isFinite);
   if (!adminIds.length) {
-    console.warn('[broadcast] cannot cache photo: ADMIN_TELEGRAM_IDS is empty');
-    return null;
+    return {
+      ok: false,
+      fileId: null,
+      description: 'Задайте ADMIN_TELEGRAM_IDS — нужен чат для подготовки медиа',
+    };
   }
 
-  const result = await sendTelegramBroadcast({
+  const mediaKind = detectBroadcastMediaKind(mediaRef);
+  const result = await sendTelegramMediaMessage({
     chatId: adminIds[0],
-    text: '\u200b',
-    photoUrl: photoRef,
+    mediaUrl: mediaRef,
+    mediaKind,
+    caption: '\u200b',
   });
 
-  return result.ok ? result.fileId ?? null : null;
+  if (!result.ok) {
+    return {
+      ok: false,
+      fileId: null,
+      description: result.description ?? 'Не удалось загрузить медиа в Telegram',
+    };
+  }
+
+  if (!result.fileId) {
+    return {
+      ok: false,
+      fileId: null,
+      description: 'Telegram не вернул file_id для медиа',
+    };
+  }
+
+  return { ok: true, fileId: result.fileId, description: null };
+}
+
+/** @deprecated используйте cacheBroadcastMediaFileId */
+export async function cacheTelegramPhotoFileId(photoRef) {
+  const result = await cacheBroadcastMediaFileId(photoRef);
+  return result.ok ? result.fileId : null;
 }
 
 export async function sendTelegramBroadcast({
@@ -478,13 +517,15 @@ export async function sendTelegramBroadcast({
   replyMarkup = null,
 }) {
   const media = String(photoUrl ?? '').trim();
+  const fileId = String(photoFileId ?? '').trim();
 
-  if (media || photoFileId) {
-    const mediaKind = detectBroadcastMediaKind(media || photoFileId);
+  if (media || fileId) {
+    // Тип всегда по URL/пути (расширение); file_id расширения не имеет.
+    const mediaKind = detectBroadcastMediaKind(media);
     return sendTelegramMediaMessage({
       chatId,
       mediaUrl: media,
-      mediaFileId: photoFileId,
+      mediaFileId: fileId,
       mediaKind,
       caption: text,
       parseMode,

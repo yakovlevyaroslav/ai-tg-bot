@@ -23,7 +23,11 @@ import {
   renderBroadcastFormPage,
   renderBroadcastStatusPage,
 } from './broadcast-page.js';
-import { parseBroadcastButtons, sendTelegramBroadcast } from '../../shared/telegram-api.js';
+import {
+  cacheBroadcastMediaFileId,
+  parseBroadcastButtons,
+  sendTelegramBroadcast,
+} from '../../shared/telegram-api.js';
 import { applyUserMessagePlaceholders } from '../../shared/user-display-name.js';
 import { resolveBroadcastButtons } from '../../shared/broadcast/button-questions.js';
 import {
@@ -1316,11 +1320,31 @@ export function createAdminRouter() {
       }
 
       try {
+        let photoFileId = null;
+        if (isLocalPhotoRef(parsed.photoUrl)) {
+          // Файл лежит на RU (сайт). Воркер бота на NL его не видит —
+          // заранее получаем Telegram file_id и шлём уже по нему.
+          const cached = await cacheBroadcastMediaFileId(parsed.photoUrl);
+          if (!cached.ok) {
+            const body = renderBroadcastFormPage({
+              query: formQuery,
+              campaigns,
+              flash: broadcastFlash(
+                'error',
+                `Не удалось подготовить медиа: ${cached.description}`,
+              ),
+            });
+            res.type('html').send(layout('Рассылка', 'broadcast', body));
+            return;
+          }
+          photoFileId = cached.fileId;
+        }
+
         const campaign = await broadcastQueries.createBroadcastCampaign({
           name: parsed.name,
           messageText: parsed.messageText,
           photoUrl: parsed.photoUrl,
-          photoFileId: null,
+          photoFileId,
           replyMarkup: parsed.replyMarkup,
           filters: parsed.filters,
           sortOrder: parsed.filters.sortOrder,
