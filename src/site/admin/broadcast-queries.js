@@ -583,6 +583,19 @@ export async function promoteDueScheduledCampaigns() {
   return rows.map((row) => row.id);
 }
 
+/** Ручной запуск запланированной кампании (если воркер не подхватил). */
+export async function forceStartScheduledCampaign(id) {
+  const pool = getPool();
+  const { rows } = await pool.query(
+    `UPDATE broadcast_campaigns
+     SET status = 'queued'
+     WHERE id = $1 AND status = 'scheduled'
+     RETURNING id`,
+    [id],
+  );
+  return rows[0] ?? null;
+}
+
 export async function claimPendingDeliveries(campaignId, limit) {
   const pool = getPool();
   const { rows } = await pool.query(

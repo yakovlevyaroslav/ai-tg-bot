@@ -1,4 +1,5 @@
 import { config } from '../config.js';
+import { getPool } from '../db.js';
 import { sendTelegramBroadcast } from '../telegram-api.js';
 import { applyUserMessagePlaceholders } from '../user-display-name.js';
 import {
@@ -14,11 +15,26 @@ import {
   updateBroadcastCampaignPhotoFileId,
 } from '../../site/admin/broadcast-queries.js';
 
+const BROADCAST_WORKER_LOCK_KEY = 847291001;
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 let workerStarted = false;
+
+async function tryAcquireWorkerLock() {
+  const pool = getPool();
+  const { rows } = await pool.query('SELECT pg_try_advisory_lock($1) AS ok', [
+    BROADCAST_WORKER_LOCK_KEY,
+  ]);
+  return rows[0]?.ok === true;
+}
+
+async function releaseWorkerLock() {
+  const pool = getPool();
+  await pool.query('SELECT pg_advisory_unlock($1)', [BROADCAST_WORKER_LOCK_KEY]);
+}
 
 async function processCampaign(campaign) {
   if (campaign.status === 'queued') {
@@ -82,8 +98,15 @@ async function processCampaign(campaign) {
 }
 
 async function tick() {
+  if (!(await tryAcquireWorkerLock())) {
+    return;
+  }
+
   try {
-    await promoteDueScheduledCampaigns();
+    const promoted = await promoteDueScheduledCampaigns();
+    if (promoted.length) {
+      console.log(`[broadcast] scheduled → queued: #${promoted.join(', #')}`);
+    }
 
     const campaign = await getActiveBroadcastCampaign();
     if (!campaign) {
@@ -97,6 +120,8 @@ async function tick() {
     await processCampaign(campaign);
   } catch (err) {
     console.warn('[broadcast] worker tick failed:', err?.message ?? err);
+  } finally {
+    await releaseWorkerLock();
   }
 }
 
@@ -107,7 +132,7 @@ export function startBroadcastWorker() {
 
   workerStarted = true;
   console.log(
-    `[broadcast] worker started (batch=${config.broadcastBatchSize}, delay=${config.broadcastSendDelayMs}ms)`,
+    `[broadcast] worker started (batch=${config.broadcastBatchSize}, delay=${config.broadcastSendDelayMs}ms, interval=${config.broadcastWorkerIntervalMs}ms)`,
   );
 
   void tick();

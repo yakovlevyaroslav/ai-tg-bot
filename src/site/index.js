@@ -28,6 +28,9 @@ export async function runSite({ setupSignals = true, skipInit = false } = {}) {
     process.once('SIGTERM', () => shutdown('SIGTERM'));
   }
 
+  const { startBroadcastWorker } = await import('../shared/broadcast/worker.js');
+  startBroadcastWorker();
+
   return { server, shutdown };
 }
 

@@ -278,87 +278,38 @@ function campaignRows(campaigns) {
     .join('');
 }
 
-function renderMessageFormatHelp() {
-  return `
-    <div class="broadcast-format-help">
-      <p class="muted-text" style="margin:0 0 0.5rem">Оформление текста (HTML). Пишите теги прямо в тексте:</p>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Как написать</th><th>Что получится</th></tr></thead>
-          <tbody>
-            <tr>
-              <td><code>&lt;b&gt;жирный текст&lt;/b&gt;</code></td>
-              <td><b>жирный текст</b></td>
-            </tr>
-            <tr>
-              <td><code>&lt;i&gt;курсив&lt;/i&gt;</code></td>
-              <td><i>курсив</i></td>
-            </tr>
-            <tr>
-              <td><code>&lt;u&gt;подчёркнутый&lt;/u&gt;</code></td>
-              <td><u>подчёркнутый</u></td>
-            </tr>
-            <tr>
-              <td><code>&lt;s&gt;зачёркнутый&lt;/s&gt;</code></td>
-              <td><s>зачёркнутый</s></td>
-            </tr>
-            <tr>
-              <td><code>&lt;a href="https://example.com"&gt;ссылка&lt;/a&gt;</code></td>
-              <td>кликабельная ссылка</td>
-            </tr>
-            <tr>
-              <td><code>&lt;code&gt;код&lt;/code&gt;</code></td>
-              <td>моноширинный фрагмент</td>
-            </tr>
-            <tr>
-              <td><code>&lt;blockquote&gt;цитата&lt;/blockquote&gt;</code></td>
-              <td>цитата (как в Telegram)</td>
-            </tr>
-            <tr>
-              <td><code>&lt;blockquote expandable&gt;длинная цитата&lt;/blockquote&gt;</code></td>
-              <td>сворачиваемая цитата</td>
-            </tr>
-            <tr>
-              <td><code>{name}</code></td>
-              <td>имя пользователя из анкеты / Telegram</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <pre class="broadcast-format-example">Привет, {name}!
-
-&lt;b&gt;Специальное предложение&lt;/b&gt; только сегодня.
-&lt;i&gt;Успей забрать до вечера.&lt;/i&gt;
-
-&lt;blockquote&gt;Подсказка: зайди в «Вопросы» и спроси про отношения.&lt;/blockquote&gt;
-
-Подробнее: &lt;a href="https://personality-code.ru"&gt;на сайте&lt;/a&gt;</pre>
-    </div>`;
-}
-
 function renderScheduleFields(query = {}) {
   const mode = String(query.send_mode ?? 'now') === 'scheduled' ? 'scheduled' : 'now';
   const scheduledValue = esc(query.scheduled_at_local ?? '');
 
   return `
-    <label class="export-field export-field-wide">
+    <div class="export-field export-field-wide broadcast-schedule">
       <span>Когда отправить</span>
-      <div class="broadcast-schedule-modes">
-        <label class="export-field-check">
+      <div class="broadcast-schedule-modes" role="radiogroup" aria-label="Когда отправить">
+        <label class="broadcast-schedule-option">
           <input type="radio" name="send_mode" value="now"${mode === 'now' ? ' checked' : ''} id="send-mode-now">
           <span>Сейчас</span>
         </label>
-        <label class="export-field-check">
+        <label class="broadcast-schedule-option">
           <input type="radio" name="send_mode" value="scheduled"${mode === 'scheduled' ? ' checked' : ''} id="send-mode-scheduled">
           <span>По таймеру</span>
         </label>
       </div>
-    </label>
-    <label class="export-field export-field-wide" id="scheduled-at-field"${mode === 'scheduled' ? '' : ' hidden'}>
-      <span>Дата и время отправки <strong>(московское время, ${BROADCAST_SCHEDULE_TIMEZONE})</strong></span>
-      <input type="datetime-local" name="scheduled_at_local" id="scheduled-at-input" value="${scheduledValue}">
-      <span class="muted-text">Указывайте именно московское время. Например: 18:00 по Москве.</span>
-    </label>`;
+      <div class="broadcast-schedule-datetime${mode === 'scheduled' ? '' : ' is-hidden'}" id="scheduled-at-field">
+        <label class="broadcast-schedule-datetime-label" for="scheduled-at-input">
+          Дата и время <span class="broadcast-schedule-tz">МСК · ${BROADCAST_SCHEDULE_TIMEZONE}</span>
+        </label>
+        <input
+          type="datetime-local"
+          name="scheduled_at_local"
+          id="scheduled-at-input"
+          class="broadcast-schedule-input"
+          value="${scheduledValue}"
+          ${mode === 'scheduled' ? 'required' : ''}
+        >
+        <p class="muted-text broadcast-schedule-hint">Укажите московское время, например 18:00 по Москве</p>
+      </div>
+    </div>`;
 }
 
 function renderPhotoFields(query = {}) {
@@ -371,28 +322,50 @@ function renderPhotoFields(query = {}) {
   const maxMb = Math.round(BROADCAST_MEDIA_MAX_BYTES / (1024 * 1024));
 
   return `
-    <label class="export-field export-field-wide">
-      <span>Медиа — загрузить файл</span>
-      <input type="file" name="photo_file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/quicktime,video/webm,.mp4,.mov,.m4v,.webm">
-      <span class="muted-text">JPEG, PNG, WebP, GIF или видео MP4/MOV/WebM · до ${maxMb} МБ</span>
-    </label>
-    ${
-      previewUrl
-        ? `<div class="broadcast-photo-preview">
-             ${
-               isVideoPreview
-                 ? `<video src="${esc(previewUrl)}" controls preload="metadata"></video>`
-                 : `<img src="${esc(previewUrl)}" alt="Текущее медиа">`
-             }
-             <p class="muted-text">Файл сохранён. Чтобы заменить — выберите новый.</p>
-           </div>
-           <input type="hidden" name="photo_local" value="${esc(photoLocal)}">`
-        : ''
-    }
-    <label class="export-field export-field-wide">
-      <span>Или URL картинки / видео (если файл не загружаете)</span>
-      <input type="url" name="photo_url" value="${esc(externalUrl)}" placeholder="https://example.com/image.jpg или video.mp4">
-    </label>`;
+    <div class="export-field export-field-wide broadcast-media">
+      <span>Медиа</span>
+      <div class="broadcast-media-card">
+        <label class="broadcast-file" for="broadcast-photo-file">
+          <input
+            type="file"
+            name="photo_file"
+            id="broadcast-photo-file"
+            class="broadcast-file-input"
+            accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/quicktime,video/webm,.mp4,.mov,.m4v,.webm"
+          >
+          <span class="broadcast-file-ui">
+            <span class="broadcast-file-icon" aria-hidden="true">⬆</span>
+            <span class="broadcast-file-title">Выбрать файл</span>
+            <span class="broadcast-file-name muted-text" id="broadcast-file-name">Файл не выбран</span>
+            <span class="broadcast-file-meta muted-text">JPEG, PNG, WebP, GIF или MP4/MOV/WebM · до ${maxMb} МБ</span>
+          </span>
+        </label>
+        ${
+          previewUrl
+            ? `<div class="broadcast-photo-preview">
+                 ${
+                   isVideoPreview
+                     ? `<video src="${esc(previewUrl)}" controls preload="metadata"></video>`
+                     : `<img src="${esc(previewUrl)}" alt="Текущее медиа">`
+                 }
+                 <p class="muted-text">Сохранённый файл. Чтобы заменить — выберите новый.</p>
+               </div>
+               <input type="hidden" name="photo_local" value="${esc(photoLocal)}">`
+            : ''
+        }
+        <div class="broadcast-media-url">
+          <label class="broadcast-media-url-label" for="broadcast-photo-url">Или ссылка на файл</label>
+          <input
+            type="url"
+            name="photo_url"
+            id="broadcast-photo-url"
+            class="broadcast-media-url-input"
+            value="${esc(externalUrl)}"
+            placeholder="https://example.com/image.jpg"
+          >
+        </div>
+      </div>
+    </div>`;
 }
 
 function helpCode(text) {
@@ -677,7 +650,6 @@ export function renderBroadcastFormPage({ query = {}, campaigns = [], flash = ''
             <span>Текст сообщения</span>
             <textarea name="message_text" class="broadcast-textarea" required placeholder="Текст рассылки…">${esc(query.message_text ?? '')}</textarea>
           </label>
-          ${renderMessageFormatHelp()}
           ${renderScheduleFields(query)}
         `,
         )}
@@ -772,16 +744,35 @@ export function renderBroadcastFormPage({ query = {}, campaigns = [], flash = ''
         }
 
         const scheduleField = document.getElementById('scheduled-at-field');
+        const scheduleInput = document.getElementById('scheduled-at-input');
         const modeNow = document.getElementById('send-mode-now');
         const modeScheduled = document.getElementById('send-mode-scheduled');
         function syncScheduleField() {
           if (!scheduleField) return;
           const scheduled = Boolean(modeScheduled?.checked);
-          scheduleField.hidden = !scheduled;
+          scheduleField.classList.toggle('is-hidden', !scheduled);
+          if (scheduleInput) {
+            scheduleInput.required = scheduled;
+            if (!scheduled) {
+              scheduleInput.removeAttribute('required');
+            }
+          }
         }
         modeNow?.addEventListener('change', syncScheduleField);
         modeScheduled?.addEventListener('change', syncScheduleField);
         syncScheduleField();
+
+        const fileInput = document.getElementById('broadcast-photo-file');
+        const fileName = document.getElementById('broadcast-file-name');
+        const fileLabel = document.querySelector('.broadcast-file');
+        function syncFileName() {
+          if (!fileInput || !fileName) return;
+          const file = fileInput.files?.[0];
+          fileName.textContent = file ? file.name : 'Файл не выбран';
+          fileLabel?.classList.toggle('has-file', Boolean(file));
+        }
+        fileInput?.addEventListener('change', syncFileName);
+        syncFileName();
       })();
     </script>`;
 }
@@ -808,6 +799,11 @@ export function renderBroadcastStatusPage({
   const sortLabel =
     BROADCAST_SORT_OPTIONS.find((option) => option.value === campaign.sort_order)?.label ??
     campaign.sort_order;
+  const scheduledAtMs = campaign.scheduled_at ? new Date(campaign.scheduled_at).getTime() : null;
+  const scheduledOverdue =
+    campaign.status === 'scheduled' &&
+    scheduledAtMs != null &&
+    scheduledAtMs <= Date.now() - 2 * 60 * 1000;
 
   const controls =
     campaign.status === 'running'
@@ -830,7 +826,15 @@ export function renderBroadcastStatusPage({
           ? `<form method="post" action="/admin/broadcast/${campaign.id}/cancel" style="display:inline"
                  onsubmit="return confirm('Отменить рассылку?');">
                <button type="submit" class="btn btn-danger btn-sm">Отменить</button>
-             </form>`
+             </form>
+             ${
+               campaign.status === 'scheduled'
+                 ? `<form method="post" action="/admin/broadcast/${campaign.id}/start-now" style="display:inline"
+                          onsubmit="return confirm('Запустить рассылку сейчас, не дожидаясь таймера?');">
+                      <button type="submit" class="btn btn-success btn-sm">Запустить сейчас</button>
+                    </form>`
+                 : ''
+             }`
           : '';
 
   const filterRows = filtersDescription.length
@@ -887,6 +891,11 @@ export function renderBroadcastStatusPage({
 
   return `
     ${flash}
+    ${
+      scheduledOverdue
+        ? `<div class="flash flash-error">Время отправки уже прошло, но статус всё ещё «По таймеру». Обычно это значит, что не работает воркер рассылки (сервис <code>ai-tg-bot</code> на NL-сервере или <code>ai-tg-site</code> на RU). Нажмите «Запустить сейчас» или проверьте логи: <code>journalctl -u ai-tg-bot -n 50</code>.</div>`
+        : ''
+    }
     <p><a href="/admin/broadcast">← Все рассылки</a></p>
     <h1 class="page-title">${esc(campaign.name)}</h1>
     <p class="page-subtitle">
@@ -895,7 +904,7 @@ export function renderBroadcastStatusPage({
 
     <div class="toolbar">${controls}
       ${campaign.status === 'running' || campaign.status === 'queued' ? '<span class="muted-text">Воркер бота отправляет сообщения каждые несколько секунд</span>' : ''}
-      ${campaign.status === 'scheduled' ? '<span class="muted-text">Ожидает московского времени запуска — отправка начнётся автоматически</span>' : ''}
+      ${campaign.status === 'scheduled' ? '<span class="muted-text">Ожидает московского времени — воркер проверяет очередь каждые несколько секунд</span>' : ''}
       <a href="/admin/broadcast/${campaign.id}" class="btn btn-ghost btn-sm">Обновить</a>
     </div>
 

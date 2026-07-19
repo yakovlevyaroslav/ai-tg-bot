@@ -1165,12 +1165,14 @@ export function createAdminRouter() {
 
     const filters = broadcastQueries.normalizeCampaignFilters(updated.filters);
     const filtersDescription = broadcastQueries.describeAudienceFilters(filters);
-    const flash = req.query.ok
-      ? broadcastFlash(
-          'success',
-          req.query.ok === '1' ? 'Статус обновлён' : String(req.query.ok),
-        )
-      : '';
+    const flash = req.query.err
+      ? broadcastFlash('error', String(req.query.err))
+      : req.query.ok
+        ? broadcastFlash(
+            'success',
+            req.query.ok === '1' ? 'Статус обновлён' : String(req.query.ok),
+          )
+        : '';
 
     const body = renderBroadcastStatusPage({
       campaign: updated,
@@ -1369,6 +1371,16 @@ export function createAdminRouter() {
     const id = Number(req.params.id);
     await cancelBroadcastCampaign(id);
     res.redirect(`/admin/broadcast/${id}`);
+  });
+
+  router.post('/broadcast/:id/start-now', async (req, res) => {
+    const id = Number(req.params.id);
+    const started = await broadcastQueries.forceStartScheduledCampaign(id);
+    if (!started) {
+      res.redirect(`/admin/broadcast/${id}?err=${encodeURIComponent('Кампания не в статусе «По таймеру»')}`);
+      return;
+    }
+    res.redirect(`/admin/broadcast/${id}?ok=${encodeURIComponent('Рассылка поставлена в очередь на отправку')}`);
   });
 
   router.use((req, res) => {
