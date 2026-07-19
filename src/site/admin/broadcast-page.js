@@ -96,19 +96,36 @@ function exportSelect(name, options, current = '') {
 function balanceFilterRadios(current = 'all') {
   const value = ['zero', 'positive'].includes(current) ? current : 'all';
   const options = [
-    { value: 'all', label: 'Все пользователи' },
+    { value: 'all', label: 'Все' },
     { value: 'zero', label: 'Баланс 0' },
     { value: 'positive', label: 'Баланс > 0' },
   ];
 
-  return options
-    .map(
-      ({ value: optionValue, label }) => `<label class="export-field export-field-check">
+  return `<div class="broadcast-schedule-modes" role="radiogroup" aria-label="Баланс вопросов">
+    ${options
+      .map(
+        ({ value: optionValue, label }) => `<label class="broadcast-schedule-option">
         <input type="radio" name="balance_filter" value="${esc(optionValue)}"${value === optionValue ? ' checked' : ''}>
         <span>${esc(label)}</span>
       </label>`,
-    )
-    .join('');
+      )
+      .join('')}
+  </div>`;
+}
+
+function statusBadge(status) {
+  const label = STATUS_LABELS[status] || status;
+  const cls =
+    {
+      scheduled: 'badge-pending',
+      queued: 'badge-pending',
+      running: 'badge-info',
+      paused: 'badge-muted',
+      completed: 'badge-success',
+      cancelled: 'badge-danger',
+      draft: 'badge-muted',
+    }[status] || 'badge-muted';
+  return `<span class="badge ${cls}">${esc(label)}</span>`;
 }
 
 function exportPeriodOptions(current) {
@@ -221,7 +238,7 @@ function audienceFilterFields(filters) {
       </label>
       <label class="export-field export-field-wide">
         <span>Баланс вопросов</span>
-        <div class="export-grid" style="grid-template-columns:1fr">${balanceFilterRadios(filters.balanceFilter ?? 'all')}</div>
+        ${balanceFilterRadios(filters.balanceFilter ?? 'all')}
       </label>
       <label class="export-field">
         <span>Неактивны (дней)</span>
@@ -250,7 +267,7 @@ function audienceFilterFields(filters) {
 
 function campaignRows(campaigns) {
   if (!campaigns.length) {
-    return `<tr><td colspan="7" class="empty">Рассылок пока не было</td></tr>`;
+    return `<tr><td colspan="6" class="empty">Рассылок пока не было</td></tr>`;
   }
 
   return campaigns
@@ -258,21 +275,25 @@ function campaignRows(campaigns) {
       const done = Number(c.sent_count) + Number(c.failed_count) + Number(c.skipped_count);
       const progress =
         c.total_recipients > 0 ? Math.round((done / c.total_recipients) * 100) : 0;
-      const when =
+      const whenLabel =
         c.status === 'scheduled' && c.scheduled_at
-          ? formatDateTime(c.scheduled_at)
+          ? `Таймер · ${formatDateTime(c.scheduled_at)}`
           : c.started_at
             ? formatDate(c.started_at)
             : formatDate(c.created_at);
 
       return `<tr>
-        <td><a href="/admin/broadcast/${c.id}">#${c.id}</a></td>
-        <td>${esc(c.name)}</td>
-        <td><span class="badge badge-muted">${esc(STATUS_LABELS[c.status] || c.status)}</span></td>
-        <td>${esc(c.sent_count)} / ${esc(c.total_recipients)} (${progress}%)</td>
-        <td>${esc(c.failed_count)}</td>
-        <td>${esc(c.skipped_count)}</td>
-        <td>${esc(when)}</td>
+        <td><a href="/admin/broadcast/${c.id}" class="broadcast-campaign-link"><strong>#${c.id}</strong> ${esc(c.name)}</a></td>
+        <td>${statusBadge(c.status)}</td>
+        <td>
+          <div class="broadcast-mini-progress">
+            <div class="broadcast-mini-progress-bar"><span style="width:${progress}%"></span></div>
+            <span class="muted-text">${esc(c.sent_count)} / ${esc(c.total_recipients)}</span>
+          </div>
+        </td>
+        <td class="muted-text">${esc(c.failed_count)}</td>
+        <td class="muted-text">${esc(c.skipped_count)}</td>
+        <td class="muted-text">${esc(whenLabel)}</td>
       </tr>`;
     })
     .join('');
@@ -322,48 +343,45 @@ function renderPhotoFields(query = {}) {
   const maxMb = Math.round(BROADCAST_MEDIA_MAX_BYTES / (1024 * 1024));
 
   return `
-    <div class="export-field export-field-wide broadcast-media">
-      <span>Медиа</span>
-      <div class="broadcast-media-card">
-        <label class="broadcast-file" for="broadcast-photo-file">
-          <input
-            type="file"
-            name="photo_file"
-            id="broadcast-photo-file"
-            class="broadcast-file-input"
-            accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/quicktime,video/webm,.mp4,.mov,.m4v,.webm"
-          >
-          <span class="broadcast-file-ui">
-            <span class="broadcast-file-icon" aria-hidden="true">⬆</span>
-            <span class="broadcast-file-title">Выбрать файл</span>
-            <span class="broadcast-file-name muted-text" id="broadcast-file-name">Файл не выбран</span>
-            <span class="broadcast-file-meta muted-text">JPEG, PNG, WebP, GIF или MP4/MOV/WebM · до ${maxMb} МБ</span>
-          </span>
-        </label>
-        ${
-          previewUrl
-            ? `<div class="broadcast-photo-preview">
-                 ${
-                   isVideoPreview
-                     ? `<video src="${esc(previewUrl)}" controls preload="metadata"></video>`
-                     : `<img src="${esc(previewUrl)}" alt="Текущее медиа">`
-                 }
-                 <p class="muted-text">Сохранённый файл. Чтобы заменить — выберите новый.</p>
-               </div>
-               <input type="hidden" name="photo_local" value="${esc(photoLocal)}">`
-            : ''
-        }
-        <div class="broadcast-media-url">
-          <label class="broadcast-media-url-label" for="broadcast-photo-url">Или ссылка на файл</label>
-          <input
-            type="url"
-            name="photo_url"
-            id="broadcast-photo-url"
-            class="broadcast-media-url-input"
-            value="${esc(externalUrl)}"
-            placeholder="https://example.com/image.jpg"
-          >
-        </div>
+    <div class="broadcast-media-card">
+      <label class="broadcast-file" for="broadcast-photo-file">
+        <input
+          type="file"
+          name="photo_file"
+          id="broadcast-photo-file"
+          class="broadcast-file-input"
+          accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/quicktime,video/webm,.mp4,.mov,.m4v,.webm"
+        >
+        <span class="broadcast-file-ui">
+          <span class="broadcast-file-icon" aria-hidden="true">⬆</span>
+          <span class="broadcast-file-title">Выбрать файл</span>
+          <span class="broadcast-file-name muted-text" id="broadcast-file-name">Файл не выбран</span>
+          <span class="broadcast-file-meta muted-text">JPEG, PNG, WebP, GIF или MP4/MOV/WebM · до ${maxMb} МБ</span>
+        </span>
+      </label>
+      ${
+        previewUrl
+          ? `<div class="broadcast-photo-preview">
+               ${
+                 isVideoPreview
+                   ? `<video src="${esc(previewUrl)}" controls preload="metadata"></video>`
+                   : `<img src="${esc(previewUrl)}" alt="Текущее медиа">`
+               }
+               <p class="muted-text">Сохранённый файл. Чтобы заменить — выберите новый.</p>
+             </div>
+             <input type="hidden" name="photo_local" value="${esc(photoLocal)}">`
+          : ''
+      }
+      <div class="broadcast-media-url">
+        <label class="broadcast-media-url-label" for="broadcast-photo-url">Или ссылка на файл</label>
+        <input
+          type="url"
+          name="photo_url"
+          id="broadcast-photo-url"
+          class="broadcast-media-url-input"
+          value="${esc(externalUrl)}"
+          placeholder="https://example.com/image.jpg"
+        >
       </div>
     </div>`;
 }
@@ -425,8 +443,8 @@ function renderBroadcastButtonsHelp() {
     .join('');
 
   return `
-    <div class="card broadcast-help" id="buttons-help">
-      <div class="card-header">Справка: поле «Кнопки»</div>
+    <details class="card broadcast-help" id="buttons-help">
+      <summary class="card-header broadcast-help-summary">Справка по кнопкам и callback</summary>
       <div class="broadcast-help-body">
 
         <h3 class="broadcast-help-title">Формат</h3>
@@ -618,7 +636,21 @@ utm_source=telegram · utm_medium=broadcast · utm_campaign=march
 
 💫 Стартовый пакет => callback:buy:${packages[0]?.rub ?? 200} || 📋 Все тарифы => callback:post:tariffs</pre>
       </div>
-    </div>`;
+    </details>`;
+}
+
+function broadcastStep(n, title, hint, body) {
+  return `
+    <section class="broadcast-step">
+      <header class="broadcast-step-header">
+        <span class="broadcast-step-num">${n}</span>
+        <div>
+          <h2 class="broadcast-step-title">${esc(title)}</h2>
+          ${hint ? `<p class="broadcast-step-hint muted-text">${hint}</p>` : ''}
+        </div>
+      </header>
+      <div class="broadcast-step-body">${body}</div>
+    </section>`;
 }
 
 export function renderBroadcastFormPage({ query = {}, campaigns = [], flash = '' }) {
@@ -626,102 +658,136 @@ export function renderBroadcastFormPage({ query = {}, campaigns = [], flash = ''
   const adminIds = config.adminTelegramIds.filter(Number.isFinite);
   const testHint =
     adminIds.length > 0
-      ? `Тест уйдёт на telegram_id: ${adminIds.join(', ')}`
+      ? `Тест уйдёт на: ${adminIds.join(', ')}`
       : 'Задайте ADMIN_TELEGRAM_IDS для тестовой отправки';
 
   return `
     ${flash}
-    <h1 class="page-title">Рассылка в бот</h1>
-    <p class="page-subtitle">
-      Сообщения уходят через Telegram Bot API · воркер на процессе бота · макс. ${BROADCAST_MAX_RECIPIENTS} получателей
-    </p>
+    <div class="broadcast-page">
+      <header class="broadcast-page-header">
+        <div>
+          <h1 class="page-title">Рассылка</h1>
+          <p class="page-subtitle">
+            Сообщение в Telegram · до ${BROADCAST_MAX_RECIPIENTS} получателей · время таймера — московское
+          </p>
+        </div>
+        <a href="#broadcast-campaigns" class="btn btn-ghost btn-sm">К кампаниям ↓</a>
+      </header>
 
-    <form method="post" action="/admin/broadcast" enctype="multipart/form-data" class="card" style="margin-bottom:1rem" id="broadcast-form">
-      <div class="card-header">1. Сообщение</div>
-      <div class="export-form">
-        ${exportFilterSection(
-          'Текст',
+      <div class="card broadcast-campaigns-card" id="broadcast-campaigns">
+        <div class="card-header broadcast-campaigns-header">
+          <span>Последние кампании</span>
+          <a href="#broadcast-form" class="muted-text">Создать новую ↑</a>
+        </div>
+        <div class="table-wrap">
+          <table class="broadcast-campaigns-table">
+            <thead>
+              <tr>
+                <th>Кампания</th>
+                <th>Статус</th>
+                <th>Прогресс</th>
+                <th>Ошибки</th>
+                <th>Пропущено</th>
+                <th>Время</th>
+              </tr>
+            </thead>
+            <tbody>${campaignRows(campaigns)}</tbody>
+          </table>
+        </div>
+      </div>
+
+      <form method="post" action="/admin/broadcast" enctype="multipart/form-data" class="broadcast-form" id="broadcast-form">
+        ${broadcastStep(
+          1,
+          'Сообщение',
+          'Название видно только вам. В тексте можно {name}, &lt;b&gt;, &lt;i&gt;, &lt;blockquote&gt;.',
           `
-          <label class="export-field export-field-wide">
-            <span>Название кампании (для себя)</span>
-            <input type="text" name="name" required maxlength="120" value="${esc(query.name ?? '')}" placeholder="Например: Акция на тарифы">
-          </label>
-          <label class="export-field export-field-wide">
-            <span>Текст сообщения</span>
-            <textarea name="message_text" class="broadcast-textarea" required placeholder="Текст рассылки…">${esc(query.message_text ?? '')}</textarea>
-          </label>
-          ${renderScheduleFields(query)}
-        `,
+          <div class="export-grid">
+            <label class="export-field export-field-wide">
+              <span>Название кампании</span>
+              <input type="text" name="name" required maxlength="120" value="${esc(query.name ?? '')}" placeholder="Например: Акция на тарифы">
+            </label>
+            <label class="export-field export-field-wide">
+              <span>Текст</span>
+              <textarea name="message_text" class="broadcast-textarea" required placeholder="Привет, {name}!…">${esc(query.message_text ?? '')}</textarea>
+            </label>
+            ${renderScheduleFields(query)}
+          </div>
+          `,
         )}
-        ${exportFilterSection('Медиа', renderPhotoFields(query))}
-        ${exportFilterSection(
+
+        ${broadcastStep(
+          2,
+          'Медиа',
+          'Необязательно · фото или видео до 100 МБ',
+          renderPhotoFields(query),
+        )}
+
+        ${broadcastStep(
+          3,
           'Кнопки',
+          'Необязательно · строка = ряд, в ряду через || · <a href="#buttons-help">справка</a>',
           `
-          <label class="export-field export-field-wide" id="buttons-field">
-            <span>Необязательно · <a href="#buttons-help">полная справка ↓</a></span>
-            <textarea name="buttons_text" class="broadcast-textarea broadcast-textarea-sm" placeholder="📋 Тарифы => callback:post:tariffs || 🌐 Сайт => https://personality-code.ru">${esc(query.buttons_text ?? '')}</textarea>
-          </label>
-        `,
+          <div class="export-grid">
+            <label class="export-field export-field-wide" id="buttons-field">
+              <span>Кнопки под сообщением</span>
+              <textarea name="buttons_text" class="broadcast-textarea broadcast-textarea-sm" placeholder="📋 Тарифы => callback:post:tariffs || 🌐 Сайт => https://personality-code.ru">${esc(query.buttons_text ?? '')}</textarea>
+            </label>
+            <p class="muted-text broadcast-inline-hint">
+              Ссылка: <code>Текст => https://…</code> ·
+              Бот: <code>Текст => callback:post:tariffs</code> ·
+              Вопрос: <code>Текст => question:…</code>
+            </p>
+            <details class="broadcast-advanced">
+              <summary>UTM для URL-кнопок</summary>
+              <div class="export-grid broadcast-advanced-body">
+                <label class="export-field">
+                  <span>utm_source</span>
+                  <input type="text" name="utm_source" value="${esc(query.utm_source ?? '')}" placeholder="telegram">
+                </label>
+                <label class="export-field">
+                  <span>utm_medium</span>
+                  <input type="text" name="utm_medium" value="${esc(query.utm_medium ?? '')}" placeholder="broadcast">
+                </label>
+                <label class="export-field">
+                  <span>utm_campaign</span>
+                  <input type="text" name="utm_campaign" value="${esc(query.utm_campaign ?? '')}" placeholder="march_sale">
+                </label>
+                <label class="export-field">
+                  <span>utm_content</span>
+                  <input type="text" name="utm_content" value="${esc(query.utm_content ?? '')}" placeholder="btn_site">
+                </label>
+                <label class="export-field">
+                  <span>utm_term</span>
+                  <input type="text" name="utm_term" value="${esc(query.utm_term ?? '')}" placeholder="">
+                </label>
+              </div>
+              <p class="muted-text broadcast-inline-hint">Добавляется только к https-кнопкам на сайт, не к t.me?start=</p>
+            </details>
+          </div>
+          `,
         )}
-        ${exportFilterSection(
-          'UTM для URL-кнопок',
-          `
-          <label class="export-field">
-            <span>utm_source</span>
-            <input type="text" name="utm_source" value="${esc(query.utm_source ?? '')}" placeholder="telegram">
-          </label>
-          <label class="export-field">
-            <span>utm_medium</span>
-            <input type="text" name="utm_medium" value="${esc(query.utm_medium ?? '')}" placeholder="broadcast">
-          </label>
-          <label class="export-field">
-            <span>utm_campaign</span>
-            <input type="text" name="utm_campaign" value="${esc(query.utm_campaign ?? '')}" placeholder="march_sale">
-          </label>
-          <label class="export-field">
-            <span>utm_content</span>
-            <input type="text" name="utm_content" value="${esc(query.utm_content ?? '')}" placeholder="btn_site">
-          </label>
-          <label class="export-field">
-            <span>utm_term</span>
-            <input type="text" name="utm_term" value="${esc(query.utm_term ?? '')}" placeholder="">
-          </label>
-        `,
+
+        ${broadcastStep(
+          4,
+          'Аудитория',
+          'Кому отправить · фильтры как в выгрузке',
+          `<div class="export-form broadcast-audience">${audienceFilterFields(filters)}</div>`,
         )}
-        <p class="muted-text export-hint">
-          <strong>Кратко:</strong> строка = ряд кнопок; в ряду — через <code>||</code>.
-          Ссылка: <code>Текст => https://…</code>.
-          Бот: <code>Текст => callback:post:tariffs</code> (или без префикса <code>callback:</code>).
-          <strong>Сразу ответ:</strong> <code>Текст => question:Ваш вопрос</code>.
-          UTM добавляется только к <strong>URL-кнопкам</strong> (сайт, не <code>t.me?start=</code>).
-          ${esc(testHint)}.
-        </p>
-      </div>
 
-      <div class="card-header">2. Аудитория</div>
-      <div class="export-form">${audienceFilterFields(filters)}</div>
+        <div class="broadcast-actions">
+          <div class="broadcast-actions-main">
+            <button type="submit" name="action" value="start" class="btn btn-success"
+                    onclick="return confirm(document.getElementById('send-mode-scheduled')?.checked ? 'Запланировать рассылку на указанное московское время?' : 'Запустить рассылку сейчас?');">
+              Запустить / запланировать
+            </button>
+            <button type="submit" name="action" value="test" class="btn btn-ghost">Тест себе</button>
+          </div>
+          <p class="muted-text broadcast-actions-hint">${esc(testHint)}</p>
+        </div>
+      </form>
 
-      <div class="export-actions" style="padding:0 1rem 1.25rem">
-        <button type="submit" name="action" value="test" class="btn">Тест себе</button>
-        <button type="submit" name="action" value="start" class="btn btn-success"
-                onclick="return confirm(document.getElementById('send-mode-scheduled')?.checked ? 'Запланировать рассылку на указанное московское время?' : 'Запустить рассылку сейчас? Сообщения начнут уходить получателям.');">
-          Запустить / запланировать
-        </button>
-      </div>
-    </form>
-
-    ${renderBroadcastButtonsHelp()}
-
-    <div class="card">
-      <div class="card-header">Последние кампании</div>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr><th>ID</th><th>Название</th><th>Статус</th><th>Прогресс</th><th>Ошибки</th><th>Пропущено</th><th>Старт / таймер</th></tr>
-          </thead>
-          <tbody>${campaignRows(campaigns)}</tbody>
-        </table>
-      </div>
+      ${renderBroadcastButtonsHelp()}
     </div>
 
     <script>
@@ -899,19 +965,19 @@ export function renderBroadcastStatusPage({
     <p><a href="/admin/broadcast">← Все рассылки</a></p>
     <h1 class="page-title">${esc(campaign.name)}</h1>
     <p class="page-subtitle">
-      Кампания #${campaign.id} · ${esc(STATUS_LABELS[campaign.status] || campaign.status)}
+      Кампания #${campaign.id} · ${statusBadge(campaign.status)}
     </p>
 
     <div class="toolbar">${controls}
-      ${campaign.status === 'running' || campaign.status === 'queued' ? '<span class="muted-text">Воркер бота отправляет сообщения каждые несколько секунд</span>' : ''}
-      ${campaign.status === 'scheduled' ? '<span class="muted-text">Ожидает московского времени — воркер проверяет очередь каждые несколько секунд</span>' : ''}
+      ${campaign.status === 'running' || campaign.status === 'queued' ? '<span class="muted-text">Отправка идёт каждые несколько секунд</span>' : ''}
+      ${campaign.status === 'scheduled' ? '<span class="muted-text">Ожидает московского времени запуска</span>' : ''}
       <a href="/admin/broadcast/${campaign.id}" class="btn btn-ghost btn-sm">Обновить</a>
     </div>
 
     <div class="card" style="margin-bottom:1rem">
       <div class="card-header">Сводка</div>
       <div class="detail-grid">
-        ${detailItem('Статус', `<span class="badge badge-muted">${esc(STATUS_LABELS[campaign.status] || campaign.status)}</span>`)}
+        ${detailItem('Статус', statusBadge(campaign.status))}
         ${detailItem('Получателей', esc(campaign.total_recipients))}
         ${detailItem('Отправлено', esc(campaign.sent_count))}
         ${detailItem('Ошибок', esc(campaign.failed_count))}
